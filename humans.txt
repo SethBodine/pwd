@@ -1,0 +1,21 @@
+/* TEAM */
+Developer: Seth Bodine
+GitHub: https://github.com/SethBodine
+Location: New Zealand
+
+/* THANKS */
+EFF (Electronic Frontier Foundation) — wordlist design principles
+SANS Internet Storm Center — honeypot password research (isc.sans.edu)
+
+/* SITE */
+Last update: 2026-04-15
+Language: English
+Technology: HTML5, CSS3, ES Modules (Vanilla JS)
+Hosting: Cloudflare Pages
+API: Cloudflare Pages Functions
+Font: Syne, Fira Code, DM Sans via Google Fonts
+Security: Content-Security-Policy, HSTS, no third-party scripts
+Privacy: No analytics, no cookies, passwords never leave the browser
+
+/* WHY */
+Because "Spring2026!" is not a password.

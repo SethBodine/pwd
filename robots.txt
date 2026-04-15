@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /.well-known/
+
+# Sitemap
+Sitemap: https://pwd.insecure.co.nz/sitemap.xml
+
+# PWD — https://github.com/SethBodine
