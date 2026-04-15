@@ -1,0 +1,19 @@
+# PassGen — Cloudflare Pages + Workers configuration
+# https://developers.cloudflare.com/pages/
+
+name            = "passgen"
+compatibility_date = "2024-01-01"
+
+# Pages build config
+pages_build_output_dir = "public"
+
+# No build command needed — pure static site
+# [build]
+# command = ""
+
+# Bind environment variables (set actual values in Cloudflare dashboard)
+# Never commit secret values to this file
+
+# Example bindings (uncomment and set in dashboard):
+# [[env.production.vars]]
+# DISCORD_WEBHOOK_URL = ""   # Set via Cloudflare Pages dashboard > Settings > Environment variables
