@@ -1,9 +1,11 @@
 User-agent: *
 Allow: /
 Disallow: /api/
+Disallow: /swagger.html
+Disallow: /openapi.yaml
 Disallow: /.well-known/
 
 # Sitemap
-Sitemap: https://pwd.insecure.co.nz/sitemap.xml
+Sitemap: https://YOUR_DOMAIN/sitemap.xml
 
-# PWD — https://github.com/SethBodine
+# PWD — https://github.com/YOUR_USERNAME/pwd

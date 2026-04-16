@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="robots" content="noindex"/>
+  <title>PWD API — Swagger UI</title>
+  <link rel="stylesheet" href="https://unpkg.com/swagger-ui-dist@5/swagger-ui.css"/>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; }
+
+    body {
+      margin: 0;
+      background: #0c0c14;
+      font-family: "DM Sans", system-ui, sans-serif;
+    }
+
+    /* ── Top bar ── */
+    .pwd-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 14px 24px;
+      background: #12121e;
+      border-bottom: 1px solid #2a2a44;
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .pwd-logo {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-weight: 700;
+      font-size: 18px;
+      color: #dde2f0;
+      text-decoration: none;
+    }
+    .pwd-logo-hex { color: #6d6afe; font-size: 20px; }
+    .pwd-logo-sub { font-size: 11px; color: #3e4260; font-weight: 400; letter-spacing: 1px; text-transform: uppercase; }
+    .pwd-links { display: flex; gap: 20px; }
+    .pwd-links a {
+      color: #6b7390;
+      text-decoration: none;
+      font-size: 13px;
+      transition: color 0.15s;
+    }
+    .pwd-links a:hover { color: #dde2f0; }
+
+    /* ── Swagger UI overrides ── */
+    #swagger-ui {
+      max-width: 1100px;
+      margin: 0 auto;
+      padding: 32px 20px 80px;
+    }
+
+    .swagger-ui .topbar { display: none !important; }
+
+    .swagger-ui { color: #dde2f0; }
+
+    /* Info block */
+    .swagger-ui .info .title { color: #dde2f0!important; }
+    .swagger-ui .info p,
+    .swagger-ui .info li,
+    .swagger-ui .info td { color: #9ca3b8!important; }
+    .swagger-ui .info a { color: #6d6afe!important; }
+    .swagger-ui .info h2,
+    .swagger-ui .info h3 { color: #dde2f0!important; }
+    .swagger-ui .info table { border-collapse: collapse; width: 100%; }
+    .swagger-ui .info th { color: #6b7390!important; background: #1a1a2a!important; padding: 6px 10px!important; }
+    .swagger-ui .info td { color: #9ca3b8!important; padding: 5px 10px!important; border-top: 1px solid #2a2a44!important; }
+
+    /* Operation blocks */
+    .swagger-ui .opblock {
+      background: #12121e!important;
+      border: 1px solid #2a2a44!important;
+      border-radius: 10px!important;
+      margin-bottom: 12px!important;
+    }
+    .swagger-ui .opblock.opblock-post .opblock-summary { background: rgba(109,106,254,0.08)!important; border-radius: 10px 10px 0 0!important; }
+    .swagger-ui .opblock.opblock-post .opblock-summary-method { background: #6d6afe!important; border-radius: 4px!important; }
+    .swagger-ui .opblock.opblock-get  .opblock-summary-method { background: #1d9e75!important; border-radius: 4px!important; }
+    .swagger-ui .opblock-summary-path,
+    .swagger-ui .opblock-summary-description { color: #dde2f0!important; }
+
+    .swagger-ui .opblock-body { background: #0c0c14!important; }
+    .swagger-ui .opblock-section-header { background: #1a1a2a!important; border-bottom: 1px solid #2a2a44!important; }
+    .swagger-ui .opblock-section-header label { color: #6b7390!important; }
+
+    /* Schema / model */
+    .swagger-ui .model-box { background: #12121e!important; border-radius: 8px!important; }
+    .swagger-ui .model { color: #9ca3b8!important; }
+    .swagger-ui .model .property { color: #6d6afe!important; }
+    .swagger-ui .model .property.primitive { color: #22d3b8!important; }
+    .swagger-ui section.models { border: 1px solid #2a2a44!important; border-radius: 10px!important; background: #12121e!important; }
+    .swagger-ui section.models h4 { color: #dde2f0!important; }
+    .swagger-ui .model-container { background: #0c0c14!important; border-radius: 6px!important; }
+
+    /* Parameters & responses */
+    .swagger-ui table thead tr th { color: #6b7390!important; border-bottom: 1px solid #2a2a44!important; background: #1a1a2a!important; }
+    .swagger-ui table tbody tr td { color: #9ca3b8!important; border-bottom: 1px solid rgba(42,42,68,0.5)!important; }
+    .swagger-ui .parameter__name { color: #dde2f0!important; }
+    .swagger-ui .parameter__type { color: #6d6afe!important; }
+    .swagger-ui .parameter__deprecated { color: #f87171!important; }
+    .swagger-ui .response-col_status { color: #22d3b8!important; }
+    .swagger-ui .response-col_description { color: #9ca3b8!important; }
+    .swagger-ui .response-col_links { color: #9ca3b8!important; }
+
+    /* Code / JSON */
+    .swagger-ui .highlight-code,
+    .swagger-ui .microlight { background: #1a1a2a!important; border-radius: 6px!important; }
+    .swagger-ui .microlight { color: #9ca3b8!important; }
+
+    /* Buttons */
+    .swagger-ui .btn { border-radius: 6px!important; font-weight: 500!important; }
+    .swagger-ui .btn.execute { background: #6d6afe!important; border-color: #6d6afe!important; color: #fff!important; }
+    .swagger-ui .btn.execute:hover { background: #4e4ec0!important; }
+    .swagger-ui .btn.cancel { border-color: #f87171!important; color: #f87171!important; background: transparent!important; }
+    .swagger-ui .btn.try-out__btn { border-color: #6d6afe!important; color: #6d6afe!important; background: transparent!important; }
+
+    /* Inputs */
+    .swagger-ui input[type=text],
+    .swagger-ui textarea,
+    .swagger-ui select {
+      background: #1a1a2a!important;
+      border: 1px solid #2a2a44!important;
+      border-radius: 6px!important;
+      color: #dde2f0!important;
+    }
+
+    /* Tags */
+    .swagger-ui .opblock-tag { color: #dde2f0!important; border-bottom: 1px solid #2a2a44!important; }
+    .swagger-ui .opblock-tag:hover { background: rgba(109,106,254,0.05)!important; border-radius: 8px!important; }
+    .swagger-ui .opblock-tag small { color: #6b7390!important; }
+
+    /* Expand/collapse arrows */
+    .swagger-ui .arrow { filter: invert(1) opacity(0.5); }
+
+    /* Examples dropdown */
+    .swagger-ui .examples-select { background: #1a1a2a!important; color: #dde2f0!important; border: 1px solid #2a2a44!important; border-radius: 6px!important; }
+    .swagger-ui .examples-select__section-label { color: #6b7390!important; }
+
+    /* Schema required pill */
+    .swagger-ui .parameter__required { color: #f87171!important; }
+
+    /* Scrollbar */
+    ::-webkit-scrollbar { width: 8px; height: 8px; }
+    ::-webkit-scrollbar-track { background: #0c0c14; }
+    ::-webkit-scrollbar-thumb { background: #2a2a44; border-radius: 4px; }
+    ::-webkit-scrollbar-thumb:hover { background: #3e3e68; }
+  </style>
+</head>
+<body>
+
+  <div class="pwd-bar">
+    <a href="/" class="pwd-logo">
+      <span class="pwd-logo-hex">⬡</span>
+      PWD
+      <span class="pwd-logo-sub">API docs</span>
+    </a>
+    <nav class="pwd-links">
+      <a href="/">← Generator</a>
+      <a href="/openapi.yaml">openapi.yaml</a>
+      <a href="https://github.com/SethBodine/pwd" target="_blank" rel="noopener">GitHub</a>
+    </nav>
+  </div>
+
+  <div id="swagger-ui"></div>
+
+  <script src="https://unpkg.com/swagger-ui-dist@5/swagger-ui-bundle.js"></script>
+  <script>
+    SwaggerUIBundle({
+      url:            "/openapi.yaml",
+      dom_id:         "#swagger-ui",
+      presets:        [SwaggerUIBundle.presets.apis, SwaggerUIBundle.SwaggerUIStandalonePreset],
+      layout:         "BaseLayout",
+      deepLinking:    true,
+      defaultModelsExpandDepth: 2,
+      defaultModelExpandDepth:  2,
+      displayRequestDuration:   true,
+      filter:                   false,
+      showExtensions:           false,
+      showCommonExtensions:     false,
+      tryItOutEnabled:          true,
+      requestInterceptor: req => {
+        // Ensure Content-Type is set for POST requests
+        if (req.method === "POST") {
+          req.headers["Content-Type"] = "application/json";
+        }
+        return req;
+      }
+    });
+  </script>
+
+</body>
+</html>

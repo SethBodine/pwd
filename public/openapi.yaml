@@ -1,0 +1,542 @@
+openapi: 3.1.0
+
+info:
+  title: PWD — Secure Password Generator API
+  version: 1.0.0
+  description: |
+    Cryptographically secure password generation via Cloudflare Pages Functions.
+
+    Three generation modes are available:
+    - **word** — Diceware-style passphrase from a curated 1,246-word list
+    - **char** — Random character password with configurable complexity
+    - **phrase** — Grammatically coherent sentence passphrase (article + adjective + noun + verb + adverb)
+
+    ### Entropy models
+    Every response includes two entropy figures:
+
+    | Field | Model | Description |
+    |---|---|---|
+    | `bits` / `time` | Generation model | Attacker knows your wordlist and word count — conservative cryptographic bound |
+    | `bfBits` / `bfTime` | Brute-force model | Attacker tries all character combinations — what most online meters display |
+
+    ### Crack time baseline
+    All crack times assume **SHA-256 at 8 billion guesses/second** (RTX 4090 GPU cluster).
+    This is the responsible middle ground — faster than broken algorithms (MD5/NTLM),
+    slower than modern KDFs (bcrypt/Argon2).
+
+    ### Insecure algorithms
+    MD5, SHA-1, NTLM, LM, DES, and RC4 are cryptographically broken.
+    Password complexity is irrelevant when the hashing algorithm itself can be reversed.
+    Crack time estimates do not apply to these algorithms.
+
+    ### Privacy
+    No passwords, no user data, and no analytics are stored or logged anywhere.
+
+  contact:
+    name: SethBodine
+    url: https://github.com/SethBodine/pwd
+
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+externalDocs:
+  description: Full documentation and source code
+  url: https://github.com/SethBodine/pwd
+
+servers:
+  - url: https://YOUR_DOMAIN
+    description: Production (Cloudflare Pages)
+  - url: http://localhost:8788
+    description: Local development (wrangler pages dev)
+
+tags:
+  - name: generation
+    description: Password and passphrase generation
+
+paths:
+  /api/generate:
+    post:
+      operationId: generatePasswords
+      summary: Generate passwords or passphrases
+      description: |
+        Generates one or more passwords using the selected mode and options.
+        All generation is performed at the edge using `crypto.getRandomValues()`.
+        No passwords are logged or stored.
+      tags:
+        - generation
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/GenerateRequest'
+            examples:
+              word_basic:
+                summary: Word-based, 5 words, hyphen separator
+                value:
+                  type: word
+                  count: 3
+                  wordCount: 5
+                  separator: "-"
+                  capMode: first
+                  injectNum: false
+                  leet: false
+              word_leet:
+                summary: Word-based with l33t and random separator
+                value:
+                  type: word
+                  count: 1
+                  wordCount: 6
+                  separator: "__random__"
+                  capMode: random
+                  injectNum: true
+                  leet: true
+              char_full:
+                summary: Character password, 24 chars, all complexity
+                value:
+                  type: char
+                  count: 3
+                  length: 24
+                  lower: true
+                  upper: true
+                  numbers: true
+                  special: true
+              char_alphanumeric:
+                summary: Character password, alphanumeric only
+                value:
+                  type: char
+                  count: 1
+                  length: 16
+                  lower: true
+                  upper: true
+                  numbers: true
+                  special: false
+              phrase_space:
+                summary: Sentence passphrase with space separator
+                value:
+                  type: phrase
+                  count: 3
+                  wordCount: 5
+                  separator: " "
+                  capMode: first
+                  leet: false
+              phrase_random:
+                summary: Sentence passphrase, random separator, l33t
+                value:
+                  type: phrase
+                  count: 1
+                  wordCount: 6
+                  separator: null
+                  capMode: vowel
+                  injectNum: true
+                  leet: true
+      responses:
+        '200':
+          description: Passwords generated successfully
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Cache-Control:
+              schema:
+                type: string
+                example: no-store
+            X-Content-Type-Options:
+              schema:
+                type: string
+                example: nosniff
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/GenerateResponse'
+              examples:
+                word_response:
+                  summary: Word-based response
+                  value:
+                    passwords:
+                      - value: "Cobalt-Forest-Leaps-Swiftly-Alone"
+                        bits: 51.4
+                        bfBits: 185.2
+                        strength:
+                          label: Good
+                          level: 2
+                        time: "2.1k years"
+                        bfTime: "longer than the universe's age"
+                        warnings: []
+                        type: word
+                    meta:
+                      type: word
+                      count: 1
+                      generatedAt: "2026-04-17T10:30:00.000Z"
+                      rateNote: "SHA-256 @ 8B/sec GPU baseline"
+                char_response:
+                  summary: Character-based response
+                  value:
+                    passwords:
+                      - value: "mK#9vXpL2@qRtN7sJwEa4cBd"
+                        bits: 157.6
+                        bfBits: 157.6
+                        strength:
+                          label: Excellent
+                          level: 4
+                        time: "longer than the universe's age"
+                        bfTime: "longer than the universe's age"
+                        warnings: []
+                        type: char
+                    meta:
+                      type: char
+                      count: 1
+                      generatedAt: "2026-04-17T10:30:00.000Z"
+                      rateNote: "SHA-256 @ 8B/sec GPU baseline"
+                phrase_response:
+                  summary: Sentence passphrase response
+                  value:
+                    passwords:
+                      - value: "The Swift Fox Leaps Boldly"
+                        bits: 67.3
+                        bfBits: 141.4
+                        strength:
+                          label: Good
+                          level: 2
+                        time: "18.7k years"
+                        bfTime: "longer than the universe's age"
+                        warnings: []
+                        type: phrase
+                    meta:
+                      type: phrase
+                      count: 1
+                      generatedAt: "2026-04-17T10:30:00.000Z"
+                      rateNote: "SHA-256 @ 8B/sec GPU baseline"
+                with_warnings:
+                  summary: Response with anti-pattern warnings
+                  value:
+                    passwords:
+                      - value: "Spring2026-Tiger"
+                        bits: 18.1
+                        bfBits: 92.4
+                        strength:
+                          label: Weak
+                          level: 0
+                        time: "< 1 second"
+                        bfTime: "4.2M years"
+                        warnings:
+                          - "Contains year 2026 — common in breached passwords"
+                          - "Season + number (spring+year) — common forced-rotation password"
+                        type: word
+                    meta:
+                      type: word
+                      count: 1
+                      generatedAt: "2026-04-17T10:30:00.000Z"
+                      rateNote: "SHA-256 @ 8B/sec GPU baseline"
+
+    options:
+      operationId: generatePreflight
+      summary: CORS preflight
+      description: Handles CORS preflight requests. All origins are permitted.
+      tags:
+        - generation
+      responses:
+        '204':
+          description: CORS preflight accepted
+          headers:
+            Access-Control-Allow-Origin:
+              schema:
+                type: string
+                example: "*"
+            Access-Control-Allow-Methods:
+              schema:
+                type: string
+                example: "POST, OPTIONS"
+            Access-Control-Allow-Headers:
+              schema:
+                type: string
+                example: "Content-Type"
+            Access-Control-Max-Age:
+              schema:
+                type: string
+                example: "86400"
+
+components:
+  schemas:
+
+    GenerateRequest:
+      type: object
+      description: |
+        Request body for password generation. All fields are optional — defaults are applied per type.
+        Fields for other types are ignored (e.g. `length` is ignored for `type: word`).
+      properties:
+
+        type:
+          type: string
+          enum: [word, char, phrase]
+          default: word
+          description: |
+            Generation mode:
+            - `word` — Diceware-style passphrase
+            - `char` — Random character password
+            - `phrase` — Sentence passphrase
+
+        count:
+          type: integer
+          minimum: 1
+          maximum: 10
+          default: 1
+          description: Number of passwords to generate in one request.
+
+        # ── Word / Phrase shared options ────────────────
+
+        wordCount:
+          type: integer
+          minimum: 2
+          maximum: 10
+          default: 5
+          description: |
+            Number of words. Range 2–10 for `word` type, 3–8 for `phrase` type
+            (values outside the phrase range are clamped).
+
+        separator:
+          oneOf:
+            - type: string
+              enum: ["-", ".", " ", "_", "~", "!", "@", "#", "$", "%", "^", "&", "*", "=", "+", "|", "__random__"]
+            - type: "null"
+          default: "-"
+          description: |
+            Word separator character. Use `"__random__"` or `null` (phrase only) to pick
+            randomly each generation — adds log₂(16) ≈ 4 bits of entropy.
+
+            | Value | Character |
+            |---|---|
+            | `"-"` | Hyphen |
+            | `"."` | Dot |
+            | `" "` | Space |
+            | `"_"` | Underscore |
+            | `"~"` | Tilde |
+            | `"!"` | Bang |
+            | `"@"` | At |
+            | `"#"` | Hash |
+            | `"$"` | Dollar |
+            | `"%"` | Percent |
+            | `"^"` | Caret |
+            | `"&"` | Ampersand |
+            | `"*"` | Star |
+            | `"="` | Equals |
+            | `"+"` | Plus |
+            | `"\|"` | Pipe |
+            | `"__random__"` | Random per generation |
+
+        capMode:
+          type: string
+          enum: [first, last, random, vowel, all, none]
+          default: first
+          description: |
+            Capitalisation strategy applied to each word.
+
+            | Value | Effect | Entropy bonus |
+            |---|---|---|
+            | `first` | First letter (e.g. Cobalt) | 0 bits |
+            | `last` | Last letter (e.g. cobalT) | 0 bits |
+            | `random` | One random position | +log₂(5) ≈ +2.3 bits/word |
+            | `vowel` | One random vowel | +log₂(2.5) ≈ +1.3 bits/word |
+            | `all` | ALL CAPS | 0 bits |
+            | `none` | No capitalisation | 0 bits |
+
+        injectNum:
+          type: boolean
+          default: false
+          description: |
+            Insert a digit (1–9) at a random position inside a word.
+            The digit is never appended to the end of the full password
+            (per SANS ISC honeypot research on common password patterns).
+
+        leet:
+          type: boolean
+          default: false
+          description: |
+            Apply l33t substitutions. Each substitutable character has a 50% chance
+            of being replaced. Adds entropy proportional to the number of substitutable
+            characters in the generated words.
+
+            | Char | Substitutions |
+            |---|---|
+            | a / A | `4` or `@` |
+            | e / E | `3` |
+            | i / I | `1` or `!` |
+            | o / O | `0` |
+            | s / S | `$` or `5` |
+            | t / T | `7` |
+            | g / G | `9` |
+            | b / B | `8` |
+            | l / L | `1` |
+            | z / Z | `2` |
+
+        # ── Character options ───────────────────────────
+
+        length:
+          type: integer
+          minimum: 8
+          maximum: 64
+          default: 16
+          description: Password length in characters (`char` type only).
+
+        lower:
+          type: boolean
+          default: true
+          description: Include lowercase letters a–z (26 characters).
+
+        upper:
+          type: boolean
+          default: true
+          description: Include uppercase letters A–Z (26 characters).
+
+        numbers:
+          type: boolean
+          default: true
+          description: |
+            Include digits 0–9 (10 characters).
+            Sequential runs (123, 456) and year patterns are detected and reshuffled.
+
+        special:
+          type: boolean
+          default: true
+          description: "Include special characters: !@#$%^&*()-_=+[]{}|;:,.<>? (32 characters)"
+
+      example:
+        type: word
+        count: 3
+        wordCount: 5
+        separator: "-"
+        capMode: first
+        injectNum: false
+        leet: false
+
+    GenerateResponse:
+      type: object
+      required: [passwords, meta]
+      properties:
+
+        passwords:
+          type: array
+          minItems: 1
+          maxItems: 10
+          items:
+            $ref: '#/components/schemas/Password'
+
+        meta:
+          $ref: '#/components/schemas/ResponseMeta'
+
+    Password:
+      type: object
+      required: [value, bits, bfBits, strength, time, bfTime, warnings, type]
+      properties:
+
+        value:
+          type: string
+          description: The generated password or passphrase.
+          example: "Cobalt-Forest-Leaps-Swiftly-Alone"
+
+        bits:
+          type: number
+          format: float
+          description: |
+            **Generation model entropy** in bits (conservative bound).
+            Assumes attacker knows the wordlist and word count.
+            This is the cryptographically correct figure — use it as your benchmark.
+          example: 51.4
+
+        bfBits:
+          type: number
+          format: float
+          description: |
+            **Brute-force model entropy** in bits.
+            Attacker tries all character combinations without wordlist knowledge.
+            This is what passwordmonster.com and Bitwarden's meter display.
+            For character passwords, `bits` and `bfBits` are identical.
+          example: 185.2
+
+        strength:
+          $ref: '#/components/schemas/StrengthRating'
+
+        time:
+          type: string
+          description: |
+            Estimated crack time using the **generation model** entropy at SHA-256
+            baseline (8B guesses/sec GPU cluster).
+          example: "2.1k years"
+
+        bfTime:
+          type: string
+          description: |
+            Estimated crack time using the **brute-force model** entropy at the same baseline.
+          example: "longer than the universe's age"
+
+        warnings:
+          type: array
+          items:
+            type: string
+          description: |
+            Anti-pattern warnings based on SANS ISC honeypot research.
+            Empty array when no patterns are detected.
+
+            Possible warnings:
+            - `"Contains year YYYY — common in breached passwords"`
+            - `"Year at end — #1 honeypot pattern (Spring2026!, Admin@2026)"`
+            - `"Sequential digit run (123…) — extremely common in breached passwords"`
+            - `"Repeated character run — reduces effective entropy"`
+            - `"Season + number (spring+year) — common forced-rotation password"`
+            - `"Month + number — predictable rotation password"`
+          example: []
+
+        type:
+          type: string
+          enum: [word, char, phrase]
+          description: The generation type used, echoing the request.
+          example: word
+
+    StrengthRating:
+      type: object
+      required: [label, level]
+      description: Human-readable strength rating derived from generation model entropy.
+      properties:
+        label:
+          type: string
+          enum: [Weak, Fair, Good, Strong, Excellent]
+          description: |
+            | Label | Bits (generation model) |
+            |---|---|
+            | Weak | < 40 |
+            | Fair | 40–54 |
+            | Good | 55–71 |
+            | Strong | 72–94 |
+            | Excellent | 95+ |
+          example: Good
+        level:
+          type: integer
+          minimum: 0
+          maximum: 4
+          description: Numeric level (0 = Weak, 4 = Excellent). Useful for progress bars and colour coding.
+          example: 2
+
+    ResponseMeta:
+      type: object
+      required: [type, count, generatedAt, rateNote]
+      properties:
+        type:
+          type: string
+          enum: [word, char, phrase]
+          description: Generation type used.
+          example: word
+        count:
+          type: integer
+          description: Number of passwords returned.
+          example: 1
+        generatedAt:
+          type: string
+          format: date-time
+          description: ISO 8601 timestamp of generation.
+          example: "2026-04-17T10:30:00.000Z"
+        rateNote:
+          type: string
+          description: Crack time baseline description.
+          example: "SHA-256 @ 8B/sec GPU baseline"
