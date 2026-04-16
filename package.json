@@ -1,11 +1,11 @@
 {
-  "name": "passgen",
+  "name": "pwd",
   "version": "1.0.0",
   "description": "Cryptographically secure password generator — word, character, and sentence passphrase modes",
   "private": true,
   "scripts": {
     "dev":   "wrangler pages dev public --compatibility-date=2024-01-01",
-    "deploy": "wrangler pages deploy public --project-name=passgen"
+    "deploy": "wrangler pages deploy public --project-name=pwd"
   },
   "keywords": ["password", "generator", "security", "passphrase", "entropy", "cloudflare-pages"],
   "license": "MIT",

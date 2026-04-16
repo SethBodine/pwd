@@ -1,26 +1,23 @@
-// PassGen – ui.js
+// PWD – ui.js
 import { generateBatch } from "./generators.js";
-import { SEPARATORS } from "./wordlists.js";
+import { SEPARATORS, SEP_LABELS } from "./wordlists.js";
 
-// ── State
 let currentType = "word";
-let currentOpts  = {};
-let results      = [];
+let currentOpts = {};
 
-// ── DOM helpers
 const $  = (sel) => document.querySelector(sel);
 const $$ = (sel) => [...document.querySelectorAll(sel)];
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Collect options from active panel
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Collect options from the active panel
 function gatherOpts() {
   if (currentType === "word") {
+    const sep = $("#word-sep").value;
     return {
       wordCount:  parseInt($("#word-count").value),
-      separator:  $("#word-sep").value,
-      capitalize: $("#word-cap").checked,
+      separator:  sep === "__random__" ? pick(SEPARATORS) : sep,
+      capMode:    $("#word-cap").value,
       injectNum:  $("#word-num").checked,
+      leet:       $("#word-leet").checked,
     };
   }
   if (currentType === "char") {
@@ -33,50 +30,48 @@ function gatherOpts() {
     };
   }
   // phrase
+  const sep = $("#phrase-sep").value;
   return {
     wordCount:  parseInt($("#phrase-count").value),
-    separator:  $("#phrase-sep").value === "random" ? null : $("#phrase-sep").value,
-    capitalize: $("#phrase-cap").checked,
+    separator:  sep === "__random__" ? null : sep,
+    capMode:    $("#phrase-cap").value,
     injectNum:  $("#phrase-num").checked,
+    leet:       $("#phrase-leet").checked,
   };
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Generate and render
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
+
+// ── Generate + render
 function generate() {
   currentOpts = gatherOpts();
-  results     = generateBatch(currentType, currentOpts, 3);
+  const results = generateBatch(currentType, currentOpts, 3);
   renderResults(results);
 }
 
 function renderResults(results) {
   const container = $("#results");
   container.innerHTML = "";
-  results.forEach((r, idx) => {
-    const card = buildResultCard(r, idx);
-    container.appendChild(card);
-  });
+  results.forEach((r, idx) => container.appendChild(buildCard(r, idx)));
 }
 
-function buildResultCard(r, idx) {
+function buildCard(r, idx) {
   const card = document.createElement("div");
   card.className = "result-card" + (idx === 0 ? " result-card--primary" : "");
 
-  // Password value
-  const pwLine = document.createElement("div");
+  // Password value + copy
+  const pwLine  = document.createElement("div");
   pwLine.className = "pw-line";
 
   const pwText = document.createElement("span");
   pwText.className = "pw-value";
   pwText.textContent = r.value;
-  pwText.setAttribute("data-password", r.value);
 
   const copyBtn = document.createElement("button");
   copyBtn.className = "copy-btn";
   copyBtn.setAttribute("aria-label", "Copy password");
-  copyBtn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-  copyBtn.addEventListener("click", () => copyPassword(r.value, copyBtn));
+  copyBtn.innerHTML = iconCopy();
+  copyBtn.addEventListener("click", () => copyPw(r.value, copyBtn));
 
   pwLine.appendChild(pwText);
   pwLine.appendChild(copyBtn);
@@ -85,13 +80,14 @@ function buildResultCard(r, idx) {
   const meta = document.createElement("div");
   meta.className = "pw-meta";
 
-  const entropyBar = buildEntropyBar(r.bits);
-  const metaRight  = document.createElement("div");
+  const bar = buildEntropyBar(r.bits);
+
+  const metaRight = document.createElement("div");
   metaRight.className = "pw-meta-right";
 
-  const strengthSpan = document.createElement("span");
-  strengthSpan.className = `strength-badge strength--${r.strength.level}`;
-  strengthSpan.textContent = r.strength.label;
+  const badge = document.createElement("span");
+  badge.className = `strength-badge strength--${r.strength.level}`;
+  badge.textContent = r.strength.label;
 
   const bitsSpan = document.createElement("span");
   bitsSpan.className = "pw-bits";
@@ -101,37 +97,31 @@ function buildResultCard(r, idx) {
   timeSpan.className = "pw-time";
   timeSpan.textContent = `Crack time: ${r.time}`;
 
-  metaRight.appendChild(strengthSpan);
-  metaRight.appendChild(bitsSpan);
-  metaRight.appendChild(timeSpan);
+  metaRight.append(badge, bitsSpan, timeSpan);
+  meta.append(bar, metaRight);
 
-  meta.appendChild(entropyBar);
-  meta.appendChild(metaRight);
-
-  card.appendChild(pwLine);
-  card.appendChild(meta);
+  card.append(pwLine, meta);
 
   // Warnings
   if (r.warnings.length > 0) {
     const warnBlock = document.createElement("div");
     warnBlock.className = "pw-warnings";
     r.warnings.forEach(w => {
-      const badge = document.createElement("div");
-      badge.className = "warn-badge";
-      badge.innerHTML = `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>${w}`;
-      warnBlock.appendChild(badge);
+      const b = document.createElement("div");
+      b.className = "warn-badge";
+      b.innerHTML = `${iconWarn()} ${w}`;
+      warnBlock.appendChild(b);
     });
     card.appendChild(warnBlock);
   }
 
-  // Regenerate single
+  // Regen single
   const regenBtn = document.createElement("button");
   regenBtn.className = "regen-btn";
   regenBtn.textContent = "↻ Regenerate this one";
   regenBtn.addEventListener("click", () => {
-    const [newResult] = generateBatch(currentType, currentOpts, 1);
-    const newCard = buildResultCard(newResult, 0);
-    card.replaceWith(newCard);
+    const [fresh] = generateBatch(currentType, currentOpts, 1);
+    card.replaceWith(buildCard(fresh, 0));
   });
   card.appendChild(regenBtn);
 
@@ -139,17 +129,18 @@ function buildResultCard(r, idx) {
 }
 
 function buildEntropyBar(bits) {
-  const SEGMENTS = 10;
-  const MAX_BITS = 130;
-  const filled   = Math.min(SEGMENTS, Math.round((bits / MAX_BITS) * SEGMENTS));
+  const SEGS   = 12;
+  const MAX    = 130;
+  const filled = Math.min(SEGS, Math.round((bits / MAX) * SEGS));
+  const level  = bits < 40 ? 0 : bits < 55 ? 1 : bits < 72 ? 2 : bits < 95 ? 3 : 4;
 
   const bar = document.createElement("div");
   bar.className = "entropy-bar";
-  bar.setAttribute("title", `${bits} bits of entropy`);
+  bar.title = `${bits} bits of entropy`;
 
-  for (let i = 0; i < SEGMENTS; i++) {
+  for (let i = 0; i < SEGS; i++) {
     const seg = document.createElement("span");
-    seg.className = "entropy-seg" + (i < filled ? ` filled level-${getLevel(bits)}` : "");
+    seg.className = "entropy-seg" + (i < filled ? ` filled level-${level}` : "");
     bar.appendChild(seg);
   }
 
@@ -157,65 +148,81 @@ function buildEntropyBar(bits) {
   label.className = "entropy-label";
   label.textContent = `${bits}b`;
   bar.appendChild(label);
-
   return bar;
 }
 
-function getLevel(bits) {
-  if (bits < 40)  return 0;
-  if (bits < 60)  return 1;
-  if (bits < 80)  return 2;
-  if (bits < 100) return 3;
-  return 4;
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Copy to clipboard
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-async function copyPassword(value, btn) {
+// ── Clipboard
+async function copyPw(value, btn) {
   try {
     await navigator.clipboard.writeText(value);
-    btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
-    btn.classList.add("copy-btn--done");
-    setTimeout(() => {
-      btn.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
-      btn.classList.remove("copy-btn--done");
-    }, 2000);
   } catch {
-    // Fallback for non-HTTPS
-    const ta = document.createElement("textarea");
-    ta.value = value;
-    ta.style.position = "fixed";
-    ta.style.opacity  = "0";
+    const ta = Object.assign(document.createElement("textarea"), {
+      value, style: "position:fixed;opacity:0"
+    });
     document.body.appendChild(ta);
     ta.select();
     document.execCommand("copy");
     document.body.removeChild(ta);
   }
+  btn.innerHTML = iconCheck();
+  btn.classList.add("copy-btn--done");
+  setTimeout(() => {
+    btn.innerHTML = iconCopy();
+    btn.classList.remove("copy-btn--done");
+  }, 2000);
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Slider display sync
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function syncSlider(inputId, displayId, suffix = "") {
-  const input   = $(inputId);
-  const display = $(displayId);
-  if (!input || !display) return;
-  display.textContent = input.value + suffix;
-  input.addEventListener("input", () => {
-    display.textContent = input.value + suffix;
+// ── SVG icons
+function iconCopy() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg>`;
+}
+function iconCheck() {
+  return `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>`;
+}
+function iconWarn() {
+  return `<svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+}
+
+// ── Populate separator dropdowns
+function populateSepDropdowns() {
+  [["#word-sep", false], ["#phrase-sep", true]].forEach(([sel, hasRandom]) => {
+    const el = $(sel);
+    if (!el) return;
+    if (hasRandom) {
+      const opt = document.createElement("option");
+      opt.value = "__random__";
+      opt.textContent = "Random (changes each time)";
+      opt.selected = true;
+      el.appendChild(opt);
+    }
+    SEPARATORS.forEach(s => {
+      const opt = document.createElement("option");
+      opt.value = s;
+      opt.textContent = SEP_LABELS[s] || s;
+      if (!hasRandom && s === "-") opt.selected = true;
+      el.appendChild(opt);
+    });
   });
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Tab switching
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Slider sync
+function syncSlider(inputId, displayId, suffix) {
+  const input   = $(inputId);
+  const display = $(displayId);
+  if (!input || !display) return;
+  const update = () => { display.textContent = input.value + suffix; };
+  update();
+  input.addEventListener("input", update);
+}
+
+// ── Tab switching
 function initTabs() {
   $$(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
-      $$(".tab-btn").forEach(b => b.classList.remove("tab-btn--active"));
+      $$(".tab-btn").forEach(b => { b.classList.remove("tab-btn--active"); b.setAttribute("aria-selected","false"); });
       $$(".tab-panel").forEach(p => p.classList.remove("tab-panel--active"));
       btn.classList.add("tab-btn--active");
+      btn.setAttribute("aria-selected", "true");
       currentType = btn.dataset.type;
       $(`#panel-${currentType}`).classList.add("tab-panel--active");
       generate();
@@ -223,9 +230,7 @@ function initTabs() {
   });
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// API docs toggle
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── API docs toggle
 function initApiDocs() {
   const toggle = $("#api-toggle");
   const body   = $("#api-body");
@@ -233,80 +238,41 @@ function initApiDocs() {
   toggle.addEventListener("click", () => {
     const open = body.classList.toggle("api-body--open");
     toggle.querySelector(".chevron").style.transform = open ? "rotate(180deg)" : "";
-    toggle.setAttribute("aria-expanded", open);
+    toggle.setAttribute("aria-expanded", String(open));
   });
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Populate separator dropdowns
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-function populateSepDropdowns() {
-  const SEP_LABELS = {
-    "-": "Hyphen  ( - )", ".": "Dot  ( . )", "_": "Underscore  ( _ )",
-    "~": "Tilde  ( ~ )", "!": "Bang  ( ! )", "@": "At  ( @ )",
-    "#": "Hash  ( # )", "$": "Dollar  ( $ )", "%": "Percent  ( % )",
-    "^": "Caret  ( ^ )", "&": "Ampersand  ( & )", "*": "Star  ( * )",
-    "=": "Equals  ( = )", "+": "Plus  ( + )", "|": "Pipe  ( | )"
-  };
-
-  ["#word-sep", "#phrase-sep"].forEach(sel => {
-    const el = $(sel);
-    if (!el) return;
-    // For phrase, add "Random" option
-    if (sel === "#phrase-sep") {
-      const opt = document.createElement("option");
-      opt.value = "random"; opt.textContent = "Random (changes each time)";
-      el.appendChild(opt);
-    }
-    SEPARATORS.forEach(s => {
-      const opt = document.createElement("option");
-      opt.value = s; opt.textContent = SEP_LABELS[s] || s;
-      if (s === "-") opt.selected = true;
-      el.appendChild(opt);
-    });
-    // For phrase default to random
-    if (sel === "#phrase-sep") el.value = "random";
-  });
-}
-
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Keyboard shortcut: Space / Enter = regenerate all
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Keyboard shortcut
 function initKeyboard() {
-  document.addEventListener("keydown", (e) => {
-    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT") return;
+  document.addEventListener("keydown", e => {
+    if (e.target.tagName === "INPUT" || e.target.tagName === "SELECT" || e.target.tagName === "TEXTAREA") return;
     if (e.key === " " || e.key === "Enter") {
       e.preventDefault();
       generate();
-      $("#gen-btn")?.classList.add("gen-btn--pulse");
-      setTimeout(() => $("#gen-btn")?.classList.remove("gen-btn--pulse"), 300);
+      const btn = $("#gen-btn");
+      btn?.classList.add("gen-btn--pulse");
+      setTimeout(() => btn?.classList.remove("gen-btn--pulse"), 300);
     }
   });
 }
 
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-// Boot
-// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// ── Boot
 document.addEventListener("DOMContentLoaded", () => {
   populateSepDropdowns();
   initTabs();
   initApiDocs();
   initKeyboard();
 
-  // Slider sync
   syncSlider("#word-count",   "#word-count-val",   " words");
   syncSlider("#char-len",     "#char-len-val",      " chars");
   syncSlider("#phrase-count", "#phrase-count-val",  " words");
 
-  // Wire controls to live regeneration
+  // Live regen on any control change
   $$("input[type=range], input[type=checkbox], select").forEach(el => {
     el.addEventListener("change", generate);
     if (el.type === "range") el.addEventListener("input", generate);
   });
 
-  // Generate button
   $("#gen-btn").addEventListener("click", generate);
-
-  // Initial generation
   generate();
 });

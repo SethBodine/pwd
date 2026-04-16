@@ -1,4 +1,4 @@
-// PassGen – functions/_middleware.js
+// PWD – functions/_middleware.js
 // Applies security headers to every response (static + API)
 
 export async function onRequest(context) {
