@@ -206,6 +206,7 @@
       <span class="gen-hint">or press <kbd>Space</kbd></span>
     </div>
 
+    <div id="insecure-banner" class="insecure-banner" aria-label="Insecure algorithm warning"></div>
     <section id="results" class="results" aria-label="Generated passwords" aria-live="polite"></section>
 
     <!-- ── Entropy explainer ── -->
@@ -240,7 +241,7 @@
       <div class="api-body" id="api-body">
         <p class="api-intro">
           All three generators are available via a REST API on Cloudflare's edge.
-          Metadata (IP, browser, style) is logged to Discord — <strong>passwords are never logged</strong>.
+          All generation is edge-side using Cloudflare Pages Functions. <strong>No data is logged or stored.</strong>
         </p>
         <div class="api-block">
           <div class="api-method"><span class="badge-post">POST</span> <code>/api/generate</code></div>
@@ -271,7 +272,7 @@
       "value":    "C0balt-Forg3d-7Leaps-Swiftly",
       "bits":     78.4,
       "strength": { "label": "Good", "level": 2 },
-      "time":     "3.1M years",
+      "time":     "centuries",
       "warnings": [],
       "type":     "word"
     }

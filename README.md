@@ -11,7 +11,6 @@ Three modes — word-based, character-based, sentence passphrase — with real e
   │ 2–8 words   │  special, 8–64     │ noun+verb+adv   │
   └─────────────┴────────────────────┴─────────────────┘
                      Cloudflare Pages + Functions
-                     Discord webhook metadata log
 ```
 
 ---
@@ -25,7 +24,6 @@ Three modes — word-based, character-based, sentence passphrase — with real e
 - **Real entropy display** — bits, strength label (Weak → Excellent), crack-time estimate at 100B guesses/sec
 - **Variable separators** — 15 separator options including Random mode for phrases
 - **REST API** — all three generators available via `POST /api/generate`
-- **Discord metadata logging** — IP, country, browser, timestamp, password style (never the value)
 - **Security headers** — CSP, HSTS, X-Frame-Options, Permissions-Policy via middleware
 - **No build step** — pure HTML/CSS/ES Modules, deploy-ready
 
@@ -96,20 +94,11 @@ npm install          # installs wrangler for local dev
 
 ---
 
-### Step 3 — Set up the Discord webhook
+### Step 3 — Connect a custom domain (optional)
 
-The API logs metadata (never passwords) to a Discord channel on each request.
-
-1. In your Discord server, go to the channel you want logs in → **Edit Channel** → **Integrations** → **Webhooks** → **New Webhook**
-2. Name it (e.g. `PassGen Logs`), copy the **Webhook URL**
-3. In the Cloudflare dashboard: **Workers & Pages** → your project → **Settings** → **Environment variables**
-4. Add a new variable:
-   - **Variable name:** `DISCORD_WEBHOOK_URL`
-   - **Value:** your webhook URL
-   - **Environment:** Production (and Preview if desired)
-   - Click **Encrypt** to store it as a secret
-
-> Discord messages include: password type, count, IP address, country (from Cloudflare headers), User-Agent, and timestamp. **Password values are never logged.**
+1. In Cloudflare Pages → your project → **Custom domains** → **Set up a custom domain**
+2. Enter your domain (e.g. `pwd.yourdomain.com`)
+3. Cloudflare will automatically provision SSL and configure DNS
 
 ---
 
@@ -139,12 +128,6 @@ npm run dev
 ```
 
 The local dev server uses Wrangler to simulate Cloudflare Pages Functions and bindings.  
-For Discord logging locally, create a `.dev.vars` file (never commit this):
-
-```ini
-# .dev.vars  — local only, add to .gitignore
-DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/YOUR/WEBHOOK
-```
 
 ---
 

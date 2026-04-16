@@ -11,9 +11,4 @@ pages_build_output_dir = "public"
 # [build]
 # command = ""
 
-# Bind environment variables (set actual values in Cloudflare dashboard)
-# Never commit secret values to this file
-
-# Example bindings (uncomment and set in dashboard):
-# [[env.production.vars]]
-# DISCORD_WEBHOOK_URL = ""   # Set via Cloudflare Pages dashboard > Settings > Environment variables
+# No environment variables required — no tracking, no analytics.
