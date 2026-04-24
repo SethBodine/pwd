@@ -38,7 +38,9 @@ function validateRequest(body) {
   }
 
   const count = parseInt(body.count);
-  if (!isNaN(body.count) && (count < 1 || count > 10)) {
+  // Fix: guard with body.count !== undefined/null first — isNaN(null) is false in JS,
+  // so the old check incorrectly triggered when count was omitted.
+  if (body.count !== undefined && body.count !== null && !isNaN(count) && (count < 1 || count > 10)) {
     errors.push('"count" must be between 1 and 10');
   }
 
@@ -276,9 +278,43 @@ export async function onRequestPost(context) {
   const { request } = context;
 
   let body = {};
-  try { body = await request.json(); } catch {
+  try {
+    // Enforce Content-Type to prevent CSRF-style form submissions reaching the API.
+    const ct = request.headers.get("Content-Type") || "";
+    if (!ct.includes("application/json")) {
+      return new Response(JSON.stringify({
+        error: "Content-Type must be application/json",
+        passwords: [],
+      }), { status: 415, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+
+    // Hard cap at 4 KB — a valid request is well under 512 bytes.
+    // Prevents the comment-stripping regex from running on attacker-controlled large bodies.
+    const MAX_BODY = 4096;
+    const contentLength = parseInt(request.headers.get("Content-Length") || "0");
+    if (contentLength > MAX_BODY) {
+      return new Response(JSON.stringify({
+        error: "Request body too large (max 4 KB)",
+        passwords: [],
+      }), { status: 413, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+
+    // Strip JS-style comments (// … and /* … */) before parsing so that
+    // Swagger-UI examples and curl snippets with inline comments still work.
+    const raw = await request.text();
+    if (raw.length > MAX_BODY) {
+      return new Response(JSON.stringify({
+        error: "Request body too large (max 4 KB)",
+        passwords: [],
+      }), { status: 413, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }
+    const stripped = raw
+      .replace(/\/\/[^\n\r]*/g, "")          // single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, "");     // block comments
+    body = JSON.parse(stripped);
+  } catch {
     return new Response(JSON.stringify({
-      error: "Invalid JSON body",
+      error: "Invalid JSON body — check your syntax (comments are allowed but all brackets/braces must be balanced)",
       passwords: [],
     }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
   }

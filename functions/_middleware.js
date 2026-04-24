@@ -22,7 +22,8 @@ export async function onRequest(context) {
 
   headers.set("X-Frame-Options",           "DENY");
   headers.set("X-Content-Type-Options",    "nosniff");
-  headers.set("X-XSS-Protection",          "1; mode=block");
+  // X-XSS-Protection intentionally omitted — removed from living standard;
+  // the mode=block behaviour was itself exploitable in some older browsers.
   headers.set("Referrer-Policy",           "strict-origin-when-cross-origin");
   headers.set("Permissions-Policy",        "geolocation=(), microphone=(), camera=(), payment=()");
   headers.set("Strict-Transport-Security", "max-age=31536000; includeSubDomains; preload");

@@ -90,7 +90,15 @@ function buildCard(r, idx) {
     r.warnings.forEach(w => {
       const b = document.createElement("div");
       b.className = "warn-badge";
-      b.innerHTML = `${iconWarn()} ${w}`;
+      // Use separate nodes: SVG icon via innerHTML, warning text via textContent.
+      // Keeps the icon markup intact while preventing any future API-sourced
+      // warning string from being interpreted as HTML.
+      const icon = document.createElement("span");
+      icon.innerHTML = iconWarn();
+      const txt = document.createElement("span");
+      txt.textContent = w;
+      b.appendChild(icon);
+      b.appendChild(txt);
       wb.appendChild(b);
     });
     card.appendChild(wb);
