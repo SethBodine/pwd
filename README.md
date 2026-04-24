@@ -1,17 +1,12 @@
-# PassGen
+# PWD — Secure Password Generator
 
-Cryptographically secure password generator built for Cloudflare Pages.  
-Three modes — word-based, character-based, sentence passphrase — with real entropy analysis and anti-pattern detection informed by [SANS ISC honeypot research](https://isc.sans.edu/diary/32866).
+Cryptographically secure password generator built on Cloudflare Pages.  
+Three modes · Real entropy analysis · SHA-256 attack baseline · No tracking · Open source.
 
-```
-                             ⬡ PassGen
-  ┌─────────────┬────────────────────┬─────────────────┐
-  │ Word-based  │  Character-based   │ Sentence phrase │
-  │ EFF-inspired│  upper/lower/num/  │ article+adj+    │
-  │ 2–8 words   │  special, 8–64     │ noun+verb+adv   │
-  └─────────────┴────────────────────┴─────────────────┘
-                     Cloudflare Pages + Functions
-```
+**Live:** `https://YOUR_DOMAIN`  
+**API docs:** `https://YOUR_DOMAIN/swagger`  
+**OpenAPI spec:** `https://YOUR_DOMAIN/openapi.yaml`  
+**Source:** [github.com/SethBodine/pwd](https://github.com/SethBodine/pwd)
 
 ---
 
@@ -19,39 +14,85 @@ Three modes — word-based, character-based, sentence passphrase — with real e
 
 - **Three password types** — word-based (Diceware-style), character-based, sentence passphrases
 - **Cryptographically random** — `crypto.getRandomValues()` throughout, no `Math.random()`
-- **All generation is client-side** — passwords never leave the browser
-- **SANS ISC anti-pattern engine** — detects and warns on years, sequential numbers, season+year combos
-- **Real entropy display** — bits, strength label (Weak → Excellent), crack-time estimate at 100B guesses/sec
-- **Variable separators** — 15 separator options including Random mode for phrases
-- **REST API** — all three generators available via `POST /api/generate`
-- **Security headers** — CSP, HSTS, X-Frame-Options, Permissions-Policy via middleware
-- **No build step** — pure HTML/CSS/ES Modules, deploy-ready
+- **All generation client-side** — passwords never leave the browser
+- **Dual entropy model** — generation model (conservative) + brute-force model (what online meters show)
+- **SHA-256 baseline** — crack times at 8B guesses/sec (RTX 4090 GPU), the responsible middle ground
+- **SANS ISC anti-pattern engine** — warns on years, sequential numbers, season+year combos
+- **Light and dark mode** — toggle in the header; preference saved to `localStorage`
+- **REST API** — all three generators via `POST /api/generate` with full validation
+- **Swagger UI** — interactive API docs at `/swagger`
+- **OpenAPI 3.1.0 spec** — machine-readable at `/openapi.yaml`
+- **No build step** — pure HTML/CSS/ES Modules
 
 ---
 
-## Project Structure
+## Entropy and crack time explained
+
+### Two models, one response
+
+Every generated password returns two entropy figures:
+
+| Field | Model | What it means |
+|---|---|---|
+| `bits` / `time` | **Generation model** | Attacker knows your wordlist and word count — the cryptographic lower bound |
+| `bfBits` / `bfTime` | **Brute-force model** | Attacker tries all character combinations — what passwordmonster and Bitwarden show |
+
+Use the generation model as your benchmark. Reality sits between the two.
+
+### SHA-256 baseline (8B/sec)
+
+All crack times assume SHA-256 hashing at 8 billion guesses/second (RTX 4090 GPU cluster).  
+This is the responsible middle ground:
+
+| Algorithm | Rate | Status |
+|---|---|---|
+| MD5, SHA-1, NTLM, LM | 100B–500B/sec | **Broken — do not use** |
+| **SHA-256 (our baseline)** | **8B/sec** | **Acceptable minimum** |
+| bcrypt, Argon2, scrypt | 100K–1M/sec | Recommended for passwords |
+
+> **Insecure algorithms note:** MD5, SHA-1, NTLM, LM, DES, and RC4 are cryptographically broken.  
+> Password complexity is irrelevant when the hash algorithm itself is crackable.
+
+### Wordlist size matters
+
+The bundled wordlist contains 1,246 words (≈10.3 bits/word). For a 5-word passphrase:
+
+| Wordlist | Bits | SHA-256 crack time |
+|---|---|---|
+| Bundled (1,246 words) | 51.4b | ~3 days |
+| **EFF Large (7,776 words)** | **64.6b** | **~56 years** |
+
+See [Upgrading the wordlist](#upgrading-the-wordlist) for the one-command upgrade to the EFF list.
+
+---
+
+## Project structure
 
 ```
-passgen/
-├── public/                        # Static site (served by Cloudflare Pages)
-│   ├── index.html                 # Main UI
-│   ├── css/
-│   │   └── style.css              # Cryptex aesthetic — Syne + Fira Code
-│   ├── js/
-│   │   ├── wordlists.js           # EFF-inspired word list + sentence part pools
-│   │   ├── generators.js          # Three password generators
-│   │   ├── entropy.js             # Entropy calc + anti-pattern detection
-│   │   └── ui.js                  # DOM/interaction layer
+pwd/
+├── public/                    # Static site (Cloudflare Pages)
+│   ├── index.html             # Main UI — three tabs, light/dark mode
+│   ├── swagger.html           # Swagger UI (also served at /swagger)
+│   ├── openapi.yaml           # OpenAPI 3.1.0 specification
+│   ├── _redirects             # Cloudflare Pages URL redirects (/swagger → /swagger.html)
 │   ├── robots.txt
 │   ├── humans.txt
-│   └── .well-known/
-│       └── security.txt           # RFC 9116 security disclosure
-├── functions/                     # Cloudflare Pages Functions (edge API)
-│   ├── _middleware.js             # Security headers for all routes
+│   ├── .well-known/
+│   │   └── security.txt       # RFC 9116 security disclosure
+│   ├── css/
+│   │   └── style.css          # Dark + light themes (CSS custom properties)
+│   └── js/
+│       ├── wordlists.js       # 1,246-word list + sentence pools + separators
+│       ├── generators.js      # Three generators (word / char / phrase)
+│       ├── entropy.js         # Entropy calc, crack times, anti-pattern detection
+│       └── ui.js              # Tab switching, theme toggle, clipboard, entropy bar
+├── functions/                 # Cloudflare Pages Functions (edge API)
+│   ├── _middleware.js         # Security headers (CSP, HSTS, X-Frame-Options)
 │   └── api/
-│       └── generate.js            # POST /api/generate
-├── wrangler.toml                  # Cloudflare config
-├── package.json
+│       └── generate.js        # POST /api/generate — validated, aligned with client
+├── API.md                     # API reference for browser extension development
+├── wrangler.toml
+├── package.json               # npm run dev | npm run deploy
 └── README.md
 ```
 
@@ -61,293 +102,215 @@ passgen/
 
 ### Prerequisites
 
-- A [GitHub](https://github.com) account
-- A [Cloudflare](https://cloudflare.com) account (free tier works)
-- [Node.js](https://nodejs.org) 18+ and npm (for local development only)
+- [GitHub](https://github.com) account
+- [Cloudflare](https://cloudflare.com) account (free tier works)
+- [Node.js](https://nodejs.org) 18+ (for local development only)
 
----
-
-### Step 1 — Fork / Clone the repository
+### Step 1 — Fork and clone
 
 ```bash
-git clone https://github.com/YOUR_USERNAME/passgen.git
-cd passgen
-npm install          # installs wrangler for local dev
+git clone https://github.com/SethBodine/pwd.git
+cd pwd
+npm install
 ```
-
----
 
 ### Step 2 — Connect to Cloudflare Pages
 
-1. Log in to the [Cloudflare dashboard](https://dash.cloudflare.com)
-2. Go to **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
-3. Select your forked `passgen` repository
-4. Set the build configuration:
+1. Cloudflare dashboard → **Workers & Pages** → **Create** → **Pages** → **Connect to Git**
+2. Select your `pwd` repository
+3. Build settings:
 
 | Setting | Value |
 |---|---|
 | Build command | *(leave empty)* |
 | Build output directory | `public` |
-| Root directory | *(leave empty)* |
 
-5. Click **Save and Deploy** — Cloudflare will auto-detect the `functions/` directory and deploy edge functions alongside the static site.
+4. **Save and Deploy** — Cloudflare auto-detects `functions/` for edge functions.
 
----
+### Step 3 — Custom domain (optional)
 
-### Step 3 — Connect a custom domain (optional)
+Workers & Pages → your project → **Custom domains** → **Set up a custom domain**.  
+Cloudflare provisions SSL automatically.
 
-1. In Cloudflare Pages → your project → **Custom domains** → **Set up a custom domain**
-2. Enter your domain (e.g. `pwd.yourdomain.com`)
-3. Cloudflare will automatically provision SSL and configure DNS
+### Step 4 — Update placeholders
 
----
-
-### Step 4 — Custom domain (optional)
-
-1. In Cloudflare Pages → your project → **Custom domains** → **Set up a custom domain**
-2. Enter your domain (e.g. `passgen.yourdomain.com`)
-3. Cloudflare will automatically provision an SSL certificate and configure DNS
-
-Update these files once you have a domain:
+Search for `YOUR_DOMAIN` and `YOUR_USERNAME` in:
 
 | File | What to update |
 |---|---|
-| `public/robots.txt` | Replace `YOUR_DOMAIN` with your actual domain |
-| `public/humans.txt` | Replace `YOUR_USERNAME` and `YOUR_NAME` |
-| `public/.well-known/security.txt` | Replace `YOUR_DOMAIN` and `YOUR_USERNAME` |
-| `public/index.html` | Replace `YOUR_USERNAME` in GitHub links |
-
----
+| `public/robots.txt` | Sitemap URL |
+| `public/humans.txt` | Name, GitHub handle |
+| `public/.well-known/security.txt` | Domain, email, GitHub |
+| `public/openapi.yaml` | Server URL |
+| `public/swagger.html` | (automatically uses `/openapi.yaml`) |
 
 ### Step 5 — Local development
 
 ```bash
 npm run dev
-# Opens at http://localhost:8788
-# Functions served at http://localhost:8788/api/generate
+# http://localhost:8788
+# API at http://localhost:8788/api/generate
+# Swagger at http://localhost:8788/swagger
 ```
 
-The local dev server uses Wrangler to simulate Cloudflare Pages Functions and bindings.  
-
----
-
-### Step 6 — Deploy manually (optional)
+### Step 6 — Deploy manually
 
 ```bash
 npm run deploy
-# Deploys public/ to Cloudflare Pages with functions
 ```
 
-Alternatively, any push to `main` on GitHub will trigger an automatic Cloudflare Pages deployment.
+Any push to `main` also triggers automatic Cloudflare Pages deployment.
 
 ---
 
-## Security Configuration
+## API
 
-### Security headers
+### Endpoint
 
-All responses receive these headers via `functions/_middleware.js`:
-
-| Header | Value |
-|---|---|
-| `Content-Security-Policy` | `default-src 'self'` — restricts all resource loading |
-| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` |
-| `X-Frame-Options` | `DENY` — prevents clickjacking |
-| `X-Content-Type-Options` | `nosniff` — prevents MIME sniffing |
-| `Referrer-Policy` | `strict-origin-when-cross-origin` |
-| `Permissions-Policy` | Blocks geolocation, microphone, camera, payment |
-| `Cross-Origin-Opener-Policy` | `same-origin` |
-| `Cross-Origin-Resource-Policy` | `same-site` |
-
-To tighten the CSP (if you self-host fonts), remove the Google Fonts entries from `_middleware.js`:
-
-```javascript
-// Remove these two lines from the CSP:
-"style-src 'self' https://fonts.googleapis.com 'unsafe-inline'",
-"font-src 'self' https://fonts.gstatic.com",
-
-// Replace with:
-"style-src 'self'",
-"font-src 'self'",
+```
+POST /api/generate
+Content-Type: application/json
 ```
 
-Then download the fonts and place them in `public/fonts/`, updating the CSS `@font-face` declarations accordingly.
+### Quick examples
 
-### HSTS preloading
+```bash
+# Word passphrase, 5 words
+curl -X POST https://YOUR_DOMAIN/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"type":"word","wordCount":5,"separator":"-","capMode":"first","count":3}'
 
-Once your domain is live and you're confident in the configuration, submit to the [HSTS preload list](https://hstspreload.org). The `preload` directive is already set in the middleware.
+# Character password, 24 chars
+curl -X POST https://YOUR_DOMAIN/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"type":"char","length":24,"count":1}'
 
-### API rate limiting
-
-Cloudflare's built-in rate limiting can be configured in your Cloudflare dashboard:
-
-1. **Security** → **WAF** → **Rate limiting rules**
-2. Create a rule: match `http.request.uri.path contains "/api/"`, limit to **30 requests per minute per IP**
-3. Action: **Block** with a 429 response
-
-For stricter limits, use **Cloudflare Workers Rate Limiting** binding.
-
----
-
-## Well-known files
-
-### `robots.txt`
-
-Located at `/robots.txt`. Allows all crawlers on the main site, blocks the API and `.well-known/` paths.
-
-Update `YOUR_DOMAIN` before deploying.
-
-### `humans.txt`
-
-Located at `/humans.txt`. Lists project authors, tech stack, and acknowledgments. Update with your details.
-
-### `security.txt` (RFC 9116)
-
-Located at `/.well-known/security.txt`. Provides a standardised security disclosure contact.
-
-Update all placeholder values before deploying:
-- `YOUR_DOMAIN` → your actual domain
-- `YOUR_USERNAME` → your GitHub username
-- `Expires` → update annually (currently set to 2027-04-15)
-- `Contact` → your actual security contact email
-
-To add a PGP key for encrypted reports, export your public key and host it at `https://YOUR_DOMAIN/pgp-key.txt`, then update the `Encryption` field.
-
----
-
-## API Reference
-
-### `POST /api/generate`
-
-All parameters are optional — defaults are shown.
-
-```json
-{
-  "type":      "word",
-  "count":     1,
-
-  "wordCount":  4,
-  "separator":  "-",
-  "capitalize": false,
-  "injectNum":  false,
-
-  "length":  16,
-  "lower":   true,
-  "upper":   true,
-  "numbers": true,
-  "special": true
-}
+# Sentence passphrase, random separator
+curl -X POST https://YOUR_DOMAIN/api/generate \
+  -H "Content-Type: application/json" \
+  -d '{"type":"phrase","wordCount":5,"separator":null,"capMode":"first","count":3}'
 ```
 
-**Types:** `word` | `char` | `phrase`  
-**Separators:** `-` `.` `_` `~` `!` `@` `#` `$` `%` `^` `&` `*` `=` `+` `|`  
-**Count:** 1–10
+### Request parameters
 
-#### Response
+| Parameter | Type | Default | Description |
+|---|---|---|---|
+| `type` | string | `"word"` | `"word"` \| `"char"` \| `"phrase"` |
+| `count` | integer | `1` | 1–10 passwords per request |
+| `wordCount` | integer | `5` | Words (word: 2–10, phrase: 3–8) |
+| `separator` | string\|null | `"-"` | See separators table. `null` or `"__random__"` = random |
+| `capMode` | string | `"first"` | `"first"` \| `"last"` \| `"random"` \| `"vowel"` \| `"all"` \| `"none"` |
+| `injectNum` | boolean | `false` | Insert a digit mid-word (never at end) |
+| `leet` | boolean | `false` | l33t substitutions (a→4/@, e→3, i→1/!, o→0, s→$/5…) |
+| `length` | integer | `16` | Character password length (char only, 8–64) |
+| `lower` | boolean | `true` | Include a–z |
+| `upper` | boolean | `true` | Include A–Z |
+| `numbers` | boolean | `true` | Include 0–9 |
+| `special` | boolean | `true` | Include !@#$… |
+
+> **Note:** Fields not applicable to the selected `type` are silently ignored and listed in `meta.ignoredFields` in the response.
+
+### Response
 
 ```json
 {
   "passwords": [
     {
-      "value":    "Cobalt-Forest-7Leaps-Swiftly",
-      "bits":     54.2,
-      "strength": { "label": "Strong", "level": 3 },
-      "time":     "2M years",
+      "value":    "Cobalt-Forest-Leaps-Swiftly-Alone",
+      "bits":     51.4,
+      "bfBits":   185.2,
+      "strength": { "label": "Good", "level": 2 },
+      "time":     "2.1k years",
+      "bfTime":   "longer than the universe's age",
       "warnings": [],
       "type":     "word"
     }
   ],
   "meta": {
-    "type":        "word",
-    "count":       1,
-    "generatedAt": "2026-04-15T10:30:00.000Z"
+    "type":         "word",
+    "count":        1,
+    "generatedAt":  "2026-04-17T10:30:00.000Z",
+    "wordlistSize": 1246,
+    "rateNote":     "SHA-256 @ 8B/sec GPU baseline — identical to client-side calculation",
+    "crackTimeNote":"Generation model: wordlist attack (conservative). bfTime: character brute-force."
   }
 }
 ```
 
-#### cURL examples
+**Validation errors** return HTTP 400:
 
-```bash
-# Word-based, 5 words, random separator
-curl -X POST https://YOUR_DOMAIN/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{"type":"word","wordCount":5,"capitalize":true,"count":3}'
-
-# Character-based, 24 chars, all complexity
-curl -X POST https://YOUR_DOMAIN/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{"type":"char","length":24,"lower":true,"upper":true,"numbers":true,"special":true}'
-
-# Sentence passphrase, 6 words, random separator
-curl -X POST https://YOUR_DOMAIN/api/generate \
-  -H "Content-Type: application/json" \
-  -d '{"type":"phrase","wordCount":6,"separator":null,"capitalize":true}'
+```json
+{
+  "error": "Invalid request parameters",
+  "details": ["\"wordCount\" must be 2–10 for type \"word\""],
+  "passwords": []
+}
 ```
+
+### Full API docs
+
+Interactive Swagger UI: `https://YOUR_DOMAIN/swagger`  
+OpenAPI 3.1.0 spec: `https://YOUR_DOMAIN/openapi.yaml`  
+Extension reference: [`API.md`](API.md)
 
 ---
 
-## Entropy Reference
+## Security headers
 
-### Character-based
+All responses receive these headers via `functions/_middleware.js`:
 
-| Charset | Bits/char | 16 chars | 24 chars |
-|---|---|---|---|
-| Lowercase only | 4.70 | 75.2b | 112.8b |
-| Lower + upper | 5.70 | 91.2b | 136.8b |
-| Lower + upper + digits | 5.95 | 95.2b | 142.8b |
-| All (+ 32 special) | 6.55 | 104.8b | 157.2b |
-
-### Word-based (512-word list, 9 bits/word)
-
-| Words | Entropy |
+| Header | Value |
 |---|---|
-| 3 | 27 bits — Weak |
-| 4 | 36 bits — Fair |
-| 5 | 45 bits — Good |
-| 6 | 54 bits — Strong |
-| 8 | 72 bits — Excellent |
+| `Content-Security-Policy` | `default-src 'self'` |
+| `Strict-Transport-Security` | `max-age=31536000; includeSubDomains; preload` |
+| `X-Frame-Options` | `DENY` |
+| `X-Content-Type-Options` | `nosniff` |
+| `Referrer-Policy` | `strict-origin-when-cross-origin` |
+| `Permissions-Policy` | Blocks geolocation, microphone, camera, payment |
 
-### SANS ISC Anti-patterns (what we detect and warn about)
+---
 
-Based on analysis of 496,562 unique passwords from DShield honeypots:
+## Well-known files
 
-- **Year appended to end** (`Spring2026!`, `Admin@2026`) — #1 pattern in honeypot data
-- **Sequential digit runs** (`123`, `1234`, `12345`) — top contiguous numbers
-- **Current/prior year** — 2024, 2025, 2026 appear in vast majority of weak passwords  
-- **Season + year combos** — common forced-rotation pattern (`Summer2025`)
-- **Month + year combos** — another rotation pattern (`April2026`)
-- **Repeated character runs** (`aaaa`, `1111`) — significantly reduces entropy
+| File | URL | Standard |
+|---|---|---|
+| `robots.txt` | `/robots.txt` | Allows crawlers, blocks `/api/`, `/swagger.html`, `/openapi.yaml` |
+| `humans.txt` | `/humans.txt` | Credits and tech stack |
+| `security.txt` | `/.well-known/security.txt` | RFC 9116 — update `Expires` annually |
+
+---
+
+## Upgrading the wordlist
+
+The bundled wordlist has 1,246 words (10.3 bits/word). Upgrade to the full EFF Large Wordlist (7,776 words, 12.9 bits/word) for significantly stronger passphrases:
+
+```bash
+# Download and extract just the words
+curl https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt | \
+  awk '{print $2}' | \
+  grep -v '^$' | \
+  sed 's/.*/"&"/' | \
+  paste -sd ',' > eff_words.txt
+```
+
+Then replace the `WORD_LIST` array in both:
+- `public/js/wordlists.js`
+- `functions/api/generate.js`
+
+With the EFF list, a 5-word passphrase gives 64.6 bits → ~56 years at SHA-256.
 
 ---
 
 ## Privacy
 
-- **No analytics** — no Google Analytics, no tracking pixels, no cookies
-- **Client-side generation** — passwords are generated in your browser using `crypto.getRandomValues()`
-- **API metadata only** — the API logs: type, count, IP, country, browser agent, timestamp. Never the password.
-- **No persistent storage** — nothing is stored server-side
-- **Open source** — audit the code yourself
-
----
-
-## Extending the wordlist
-
-The word list in `public/js/wordlists.js` and `functions/api/generate.js` contains ~512 curated words (9 bits/word). To use the full [EFF Large Wordlist](https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt) (7776 words, 12.9 bits/word):
-
-1. Download the EFF list and strip the dice numbers:
-   ```bash
-   curl https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt | \
-     awk '{print $2}' | \
-     sed 's/.*/"&"/' | \
-     paste -sd ',' > eff_words.txt
-   ```
-2. Replace the `WORD_LIST` array in both `wordlists.js` and `functions/api/generate.js`
-3. Update entropy display — each word now provides 12.9 bits instead of 9
+- **No analytics** — no tracking pixels, no cookies, no telemetry
+- **Client-side generation** — passwords generated in your browser using `crypto.getRandomValues()`
+- **No server logging** — the API generates passwords at the edge and returns them; nothing is stored
+- **Open source** — audit the code at [github.com/SethBodine/pwd](https://github.com/SethBodine/pwd)
 
 ---
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
-
-The word list is inspired by the [EFF Long Wordlist](https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases) (CC BY 3.0).
+MIT — see [LICENSE](LICENSE) for details.  
+EFF wordlist inspiration: [EFF Long Wordlist](https://www.eff.org/deeplinks/2016/07/new-wordlists-random-passphrases) (CC BY 3.0).

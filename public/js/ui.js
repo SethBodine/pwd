@@ -262,8 +262,39 @@ function initKeyboard() {
   });
 }
 
+
+  // ── Theme toggle
+  function initTheme() {
+    const btn    = $("#theme-toggle");
+    const icon   = $("#toggle-icon");
+    const label  = $("#toggle-label");
+    if (!btn) return;
+
+    function applyTheme(theme) {
+      document.documentElement.className = theme;
+      localStorage.setItem("pwd-theme", theme);
+      if (theme === "light") {
+        icon.textContent  = "☾";
+        label.textContent = "Dark";
+      } else {
+        icon.textContent  = "☀";
+        label.textContent = "Light";
+      }
+    }
+
+    // Sync button to current state on load
+    const current = document.documentElement.className || "dark";
+    applyTheme(current);
+
+    btn.addEventListener("click", () => {
+      const next = document.documentElement.className === "light" ? "dark" : "light";
+      applyTheme(next);
+    });
+  }
+
 document.addEventListener("DOMContentLoaded", () => {
   populateSepDropdowns();
+  initTheme();
   renderInsecureBanner();
   initTabs();
   initApiDocs();

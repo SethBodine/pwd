@@ -46,7 +46,7 @@ externalDocs:
 
 servers:
   - url: https://YOUR_DOMAIN
-    description: Production (Cloudflare Pages)
+    description: Production (Cloudflare Pages — update to your actual domain)
   - url: http://localhost:8788
     description: Local development (wrangler pages dev)
 
@@ -230,6 +230,18 @@ paths:
                       count: 1
                       generatedAt: "2026-04-17T10:30:00.000Z"
                       rateNote: "SHA-256 @ 8B/sec GPU baseline"
+
+        '400':
+          description: Invalid request parameters
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorResponse'
+              example:
+                error: "Invalid request parameters"
+                details:
+                  - '"wordCount" must be 2–10 for type "word"'
+                passwords: []
 
     options:
       operationId: generatePreflight
@@ -539,4 +551,42 @@ components:
         rateNote:
           type: string
           description: Crack time baseline description.
-          example: "SHA-256 @ 8B/sec GPU baseline"
+          example: "SHA-256 @ 8B/sec GPU baseline — identical to client-side calculation"
+        wordlistSize:
+          type: integer
+          description: Number of words in the bundled wordlist.
+          example: 1246
+        crackTimeNote:
+          type: string
+          description: Explanation of the two crack time models.
+          example: "Generation model: wordlist attack (conservative). bfTime: character brute-force."
+        ignoredFields:
+          type: array
+          items:
+            type: string
+          description: Fields present in the request that are not applicable to the selected type.
+          example: ["length", "lower", "upper", "numbers", "special"]
+        ignoredNote:
+          type: string
+          description: Explanation of why fields were ignored.
+          example: 'These fields are not used for type "word" and were ignored'
+
+    ErrorResponse:
+      type: object
+      required: [error, passwords]
+      properties:
+        error:
+          type: string
+          description: Human-readable error category.
+          example: "Invalid request parameters"
+        details:
+          type: array
+          items:
+            type: string
+          description: Specific validation failure messages.
+          example: ['"wordCount" must be 2–10 for type "word"']
+        passwords:
+          type: array
+          items: {}
+          description: Always empty on error.
+          example: []

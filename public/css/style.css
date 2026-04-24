@@ -984,3 +984,89 @@ kbd {
   .timing-row { flex-direction: column; }
   .timing-time { font-size: 15px; }
 }
+
+/* ═══════════════════════════════════════════════
+   LIGHT MODE (class="light" on <html>)
+   ═══════════════════════════════════════════════ */
+html.light {
+  --bg:          #f4f3ef;
+  --surface:     #ffffff;
+  --surface-2:   #f0ede8;
+  --surface-3:   #e8e4de;
+  --border:      #d6d0c8;
+  --border-hi:   #b8b0a4;
+
+  --accent:      #5048d4;
+  --accent-dim:  #3d36b0;
+  --accent-glow: rgba(80,72,212,0.12);
+
+  --success:     #0d9e80;
+  --warning:     #c07800;
+  --danger:      #c0392b;
+
+  --text:        #1a1a2e;
+  --text-muted:  #4a4a6a;
+  --text-dim:    #8888aa;
+}
+
+/* Dot-grid adapts to light mode */
+html.light body::before {
+  background-image: radial-gradient(circle, rgba(80,72,212,0.08) 1px, transparent 1px);
+}
+
+/* Header backdrop in light mode */
+html.light .site-header {
+  background: rgba(244,243,239,0.92);
+}
+
+/* Code blocks in light mode */
+html.light .code-block {
+  background: #f0ede8;
+  border-color: #d6d0c8;
+  color: #1a1a2e;
+}
+
+/* API body in light mode */
+html.light .api-docs {
+  background: #ffffff;
+  border-color: #d6d0c8;
+}
+html.light .api-toggle:hover { background: #f0ede8; }
+
+/* ── Theme toggle button ── */
+.theme-toggle {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  padding: 5px 12px;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-family: var(--font-ui);
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  transition: all var(--transition);
+  white-space: nowrap;
+}
+.theme-toggle:hover {
+  border-color: var(--border-hi);
+  color: var(--text);
+}
+.theme-toggle .toggle-icon { font-size: 13px; }
+
+/* ── Wordlist note ── */
+.wordlist-note {
+  font-size: 12px;
+  color: var(--text-dim);
+  line-height: 1.6;
+  padding: 8px 12px;
+  background: rgba(109,106,254,0.04);
+  border: 1px solid rgba(109,106,254,0.12);
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+}
+.wordlist-note strong {
+  color: var(--text-muted);
+  font-weight: 500;
+}
