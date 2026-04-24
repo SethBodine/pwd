@@ -1,6 +1,6 @@
 // PWD – ui.js  (v3 — simplified entropy display, no Discord)
 import { generateBatch } from "./generators.js";
-import { SEPARATORS, SEP_LABELS } from "./wordlists.js";
+import { WORD_LIST, SEPARATORS, SEP_LABELS } from "./wordlists.js";
 import { BASELINE_LABEL } from "./entropy.js";
 
 // Hashes considered insecure regardless of password complexity
@@ -166,6 +166,32 @@ function buildTimingBlock(r) {
   return wrap;
 }
 
+// ── Wordlist note — driven from actual WORD_LIST size, never hardcoded
+function updateWordlistNote() {
+  const note = $("#wordlist-note");
+  if (!note) return;
+
+  const size    = WORD_LIST.length;
+  const bitsPerWord = Math.log2(size);
+  const EFF_THRESHOLD = 7776; // EFF large wordlist
+
+  if (size >= EFF_THRESHOLD) {
+    // Wordlist meets or exceeds EFF standard — note is no longer relevant
+    note.hidden = true;
+    return;
+  }
+
+  // Show note with actual current numbers
+  const bitsStr = bitsPerWord.toFixed(1);
+  note.hidden = false;
+  note.innerHTML =
+    `<strong>Generation model crack time</strong> assumes an attacker who knows your exact wordlist ` +
+    `(${size.toLocaleString()} words \u2192 ${bitsStr} bits/word). ` +
+    `Upgrade to the full <a href="https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt" ` +
+    `target="_blank" rel="noopener" class="text-link">EFF wordlist</a> ` +
+    `(7,776 words \u2192 12.9 bits/word) for stronger estimates. See README for upgrade instructions.`;
+}
+
 // ── Insecure algo banner (rendered once into #insecure-banner)
 function renderInsecureBanner() {
   const banner = $("#insecure-banner");
@@ -304,6 +330,7 @@ document.addEventListener("DOMContentLoaded", () => {
   populateSepDropdowns();
   initTheme();
   renderInsecureBanner();
+  updateWordlistNote();
   initTabs();
   initApiDocs();
   initKeyboard();

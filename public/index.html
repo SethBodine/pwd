@@ -212,11 +212,7 @@
     </div>
 
     <div id="insecure-banner" class="insecure-banner" aria-label="Insecure algorithm warning"></div>
-    <div id="wordlist-note" class="wordlist-note">
-      <strong>Generation model crack time</strong> assumes an attacker who knows your exact wordlist (1,246 words → 10.3 bits/word).
-      Upgrade to the full <a href="https://www.eff.org/files/2016/07/18/eff_large_wordlist.txt" target="_blank" rel="noopener" class="text-link">EFF wordlist</a>
-      (7,776 words → 12.9 bits/word) for 5-word passphrases to show ~56 years instead of ~3 days. See README for upgrade instructions.
-    </div>
+    <div id="wordlist-note" class="wordlist-note" hidden>
     <section id="results" class="results" aria-label="Generated passwords" aria-live="polite"></section>
 
     <!-- ── Entropy explainer ── -->
@@ -315,15 +311,9 @@
     </div>
   </footer>
 
-  <script>
-    // Theme init — runs before module load to avoid flash
-    (function() {
-      const stored = localStorage.getItem('pwd-theme');
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      const theme = stored || (prefersDark ? 'dark' : 'light');
-      document.documentElement.className = theme;
-    })();
-  </script>
+  <!-- Classic (non-module) script runs synchronously before deferred modules,
+       preventing a theme flash. Kept as a separate file to satisfy script-src 'self' CSP. -->
+  <script src="/js/theme-init.js"></script>
   <script type="module" src="/js/ui.js"></script>
 </body>
 </html>
