@@ -297,30 +297,26 @@ function initKeyboard() {
 
   // ── Theme toggle
   function initTheme() {
-    const btn    = $("#theme-toggle");
-    const icon   = $("#toggle-icon");
-    const label  = $("#toggle-label");
+    const btn   = $("#theme-toggle");
+    const icon  = $("#toggle-icon");
+    const label = $("#toggle-label");
     if (!btn) return;
 
-    function applyTheme(theme) {
-      document.documentElement.className = theme;
-      localStorage.setItem("pwd-theme", theme);
-      if (theme === "light") {
-        icon.textContent  = "☾";
-        label.textContent = "Dark";
-      } else {
-        icon.textContent  = "☀";
-        label.textContent = "Light";
-      }
+    function syncButton() {
+      const isLight = document.documentElement.classList.contains("light");
+      if (icon)  icon.textContent  = isLight ? "☾" : "☀";
+      if (label) label.textContent = isLight ? "Dark" : "Light";
     }
 
-    // Sync button to current state on load
-    const current = document.documentElement.className || "dark";
-    applyTheme(current);
+    // Sync button label to whatever theme-init.js already applied
+    syncButton();
 
     btn.addEventListener("click", () => {
-      const next = document.documentElement.className === "light" ? "dark" : "light";
-      applyTheme(next);
+      document.documentElement.classList.toggle("light");
+      document.documentElement.classList.toggle("dark");
+      const isLight = document.documentElement.classList.contains("light");
+      localStorage.setItem("pwd-theme", isLight ? "light" : "dark");
+      syncButton();
     });
   }
 

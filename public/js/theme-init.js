@@ -3,7 +3,9 @@
 // preventing a flash of the wrong theme on page load.
 // Must stay a separate file — inline scripts violate script-src 'self' CSP.
 (function () {
-  var stored = localStorage.getItem('pwd-theme');
+  var stored      = localStorage.getItem('pwd-theme');
   var prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-  document.documentElement.className = stored || (prefersDark ? 'dark' : 'light');
+  var theme       = stored || (prefersDark ? 'dark' : 'light');
+  // Use classList so ui.js can also use classList.toggle without conflict
+  document.documentElement.classList.add(theme);
 }());
