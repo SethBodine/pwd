@@ -312,10 +312,10 @@ function initKeyboard() {
     syncButton();
 
     btn.addEventListener("click", () => {
-      document.documentElement.classList.toggle("light");
-      document.documentElement.classList.toggle("dark");
-      const isLight = document.documentElement.classList.contains("light");
-      localStorage.setItem("pwd-theme", isLight ? "light" : "dark");
+      const isCurrentlyLight = document.documentElement.classList.contains("light");
+      document.documentElement.classList.remove("light", "dark");
+      document.documentElement.classList.add(isCurrentlyLight ? "dark" : "light");
+      localStorage.setItem("pwd-theme", isCurrentlyLight ? "dark" : "light");
       syncButton();
     });
   }
