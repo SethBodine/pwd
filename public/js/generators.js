@@ -169,3 +169,6 @@ export function generateBatch(type, opts, count = 3) {
            :                 generatePhrasePassword;
   return Array.from({ length: count }, () => fn(opts));
 }
+
+// Re-export wordlist size so ui.js can read it without importing the raw list
+export const WORD_LIST_SIZE = WORD_LIST.length;

@@ -1,6 +1,6 @@
 // PWD – ui.js  (v3 — simplified entropy display, no Discord)
-import { generateBatch } from "./generators.js";
-import { WORD_LIST, SEPARATORS, SEP_LABELS } from "./wordlists.js";
+import { generateBatch, WORD_LIST_SIZE } from "./generators.js";
+import { SEPARATORS, SEP_LABELS } from "./wordlists.js";
 import { BASELINE_LABEL } from "./entropy.js";
 
 // Hashes considered insecure regardless of password complexity
@@ -171,17 +171,15 @@ function updateWordlistNote() {
   const note = $("#wordlist-note");
   if (!note) return;
 
-  const size    = WORD_LIST.length;
+  const size        = WORD_LIST_SIZE;
   const bitsPerWord = Math.log2(size);
-  const EFF_THRESHOLD = 7776; // EFF large wordlist
+  const EFF_THRESHOLD = 7776;
 
   if (size >= EFF_THRESHOLD) {
-    // Wordlist meets or exceeds EFF standard — note is no longer relevant
     note.hidden = true;
     return;
   }
 
-  // Show note with actual current numbers
   const bitsStr = bitsPerWord.toFixed(1);
   note.hidden = false;
   note.innerHTML =
