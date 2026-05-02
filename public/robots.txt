@@ -7,6 +7,6 @@ Disallow: /openapi.yaml
 Disallow: /.well-known/
 
 # Sitemap
-Sitemap: https://YOUR_DOMAIN/sitemap.xml
+Sitemap: https://pwd.insecure.co.nz/sitemap.xml
 
-# PWD — https://github.com/YOUR_USERNAME/pwd
+# PWD — https://github.com/SethBodine/pwd

@@ -1,5 +1,5 @@
 /* TEAM */
-Developer: YOUR_NAME
+Developer: Seth Bodine
 GitHub: https://github.com/SethBodine
 Location: New Zealand
 

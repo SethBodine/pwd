@@ -8049,66 +8049,179 @@ function genPhrase(opts) {
   return makeResult(value, bits, "phrase");
 }
 
-// ── Main handler
-export async function onRequestPost(context) {
-  const { request } = context;
+// ─────────────────────────────────────────────
+// Rate limiting
+// ─────────────────────────────────────────────
+// 200 requests per IP per UTC calendar day, stored in Cloudflare KV.
+// KV key format:  rl:<ip>:<YYYY-MM-DD>
+// KV value:       JSON { count: number }
+// TTL:            48 hours (keys auto-expire so the namespace stays clean)
 
+const RATE_LIMIT_MAX = 200;
+const RATE_LIMIT_TTL = 60 * 60 * 48; // 48 h in seconds — covers end-of-day edge cases
+
+async function checkRateLimit(env, ip) {
+  // If the KV binding isn't wired up (e.g. local dev without a namespace),
+  // fail open so development isn't blocked.
+  if (!env?.RATE_LIMIT) return { allowed: true, count: 0, remaining: RATE_LIMIT_MAX };
+
+  const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" UTC
+  const key   = `rl:${ip}:${today}`;
+
+  let count = 0;
+  try {
+    const stored = await env.RATE_LIMIT.get(key);
+    if (stored) count = JSON.parse(stored).count ?? 0;
+  } catch {
+    // KV read failure — fail open rather than blocking legitimate traffic.
+    return { allowed: true, count: 0, remaining: RATE_LIMIT_MAX };
+  }
+
+  count += 1;
+
+  try {
+    await env.RATE_LIMIT.put(key, JSON.stringify({ count }), { expirationTtl: RATE_LIMIT_TTL });
+  } catch {
+    // KV write failure — still serve the request; just skip recording.
+  }
+
+  const allowed   = count <= RATE_LIMIT_MAX;
+  const remaining = Math.max(0, RATE_LIMIT_MAX - count);
+
+  // Reset is midnight UTC tonight expressed as a Unix epoch second.
+  const tomorrow  = new Date(today);
+  tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
+  const reset     = Math.floor(tomorrow.getTime() / 1000);
+
+  return { allowed, count, remaining, reset };
+}
+
+// ─────────────────────────────────────────────
+// Shared response helpers
+// ─────────────────────────────────────────────
+
+// Security and content headers shared by every API response.
+// CORS, Cache-Control, and Vary are also set here for completeness;
+// _middleware.js sets them on static assets but the function response
+// headers take precedence for /api/* routes.
+function apiHeaders(extra = {}) {
+  return {
+    "Content-Type":    "application/json",
+    "Cache-Control":   "no-store",
+    "X-Content-Type-Options": "nosniff",
+    ...extra,
+  };
+}
+
+function jsonResponse(body, status, rateLimitHeaders = {}) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: apiHeaders(rateLimitHeaders),
+  });
+}
+
+// ── GET /api/generate — friendly 405 with docs link
+export async function onRequestGet() {
+  return jsonResponse({
+    error:   "Method Not Allowed — use POST",
+    docsUrl: "https://pwd.insecure.co.nz/swagger",
+    example: {
+      method:  "POST",
+      url:     "https://pwd.insecure.co.nz/api/generate",
+      headers: { "Content-Type": "application/json" },
+      body:    { type: "word", wordCount: 5, count: 3 },
+    },
+  }, 405);
+}
+
+// ── OPTIONS is handled centrally by _middleware.js.
+// The export below is kept as a safety net for environments where the
+// middleware may not run (e.g. certain local wrangler versions).
+export async function onRequestOptions() {
+  return new Response(null, { status: 204 });
+}
+
+// ── POST /api/generate — main handler
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  // ── Rate limiting — checked before any body parsing.
+  const ip = request.headers.get("cf-connecting-ip") ||
+             request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+             "unknown";
+
+  const rl = await checkRateLimit(env, ip);
+
+  // Standard X-RateLimit headers tell API consumers where they stand.
+  const rlHeaders = {
+    "X-RateLimit-Limit":     String(RATE_LIMIT_MAX),
+    "X-RateLimit-Remaining": String(rl.remaining),
+    "X-RateLimit-Reset":     String(rl.reset ?? ""),
+    "X-RateLimit-Policy":    `${RATE_LIMIT_MAX};w=86400`,
+  };
+
+  if (!rl.allowed) {
+    return jsonResponse({
+      error:    "Rate limit exceeded — 200 requests per IP per day. Try again tomorrow.",
+      resetAt:  new Date((rl.reset ?? 0) * 1000).toISOString(),
+      passwords: [],
+    }, 429, rlHeaders);
+  }
+
+  // ── Parse body
   let body = {};
   try {
     // Enforce Content-Type to prevent CSRF-style form submissions reaching the API.
     const ct = request.headers.get("Content-Type") || "";
     if (!ct.includes("application/json")) {
-      return new Response(JSON.stringify({
+      return jsonResponse({
         error: "Content-Type must be application/json",
         passwords: [],
-      }), { status: 415, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }, 415, rlHeaders);
     }
 
     // Hard cap at 4 KB — a valid request is well under 512 bytes.
-    // Prevents the comment-stripping regex from running on attacker-controlled large bodies.
+    // We read the body first and measure the actual byte length; the
+    // Content-Length header is intentionally NOT used here because it can
+    // be omitted or spoofed by intermediaries, making it an unreliable guard.
     const MAX_BODY = 4096;
-    const contentLength = parseInt(request.headers.get("Content-Length") || "0");
-    if (contentLength > MAX_BODY) {
-      return new Response(JSON.stringify({
+    const raw = await request.text();
+    if (raw.length > MAX_BODY) {
+      return jsonResponse({
         error: "Request body too large (max 4 KB)",
         passwords: [],
-      }), { status: 413, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+      }, 413, rlHeaders);
     }
 
     // Strip JS-style comments (// … and /* … */) before parsing so that
     // Swagger-UI examples and curl snippets with inline comments still work.
-    const raw = await request.text();
-    if (raw.length > MAX_BODY) {
-      return new Response(JSON.stringify({
-        error: "Request body too large (max 4 KB)",
-        passwords: [],
-      }), { status: 413, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
-    }
     const stripped = raw
-      .replace(/\/\/[^\n\r]*/g, "")          // single-line comments
-      .replace(/\/\*[\s\S]*?\*\//g, "");     // block comments
+      .replace(/\/\/[^\n\r]*/g, "")      // single-line comments
+      .replace(/\/\*[\s\S]*?\*\//g, ""); // block comments
     body = JSON.parse(stripped);
   } catch {
-    return new Response(JSON.stringify({
+    return jsonResponse({
       error: "Invalid JSON body — check your syntax (comments are allowed but all brackets/braces must be balanced)",
       passwords: [],
-    }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }, 400, rlHeaders);
   }
 
+  // ── Validate parameters
   const validation = validateRequest(body);
   if (!validation.valid) {
-    return new Response(JSON.stringify({
-      error: "Invalid request parameters",
-      details: validation.errors,
+    return jsonResponse({
+      error:    "Invalid request parameters",
+      details:  validation.errors,
       passwords: [],
-    }), { status: 400, headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" } });
+    }, 400, rlHeaders);
   }
 
+  // ── Generate
   const type  = body.type || "word";
   const count = Math.min(10, Math.max(1, parseInt(body.count) || 1));
-  const fn    = type==="word" ? genWord : type==="char" ? genChar : genPhrase;
+  const fn    = type === "word" ? genWord : type === "char" ? genChar : genPhrase;
 
-  // Note which fields are applicable per type (for transparency)
+  // Note which fields are not applicable to the requested type (for transparency).
   const ignoredFields = [];
   if (type === "word") {
     ["length","lower","upper","numbers","special"].forEach(k => { if (body[k] !== undefined) ignoredFields.push(k); });
@@ -8119,41 +8232,22 @@ export async function onRequestPost(context) {
 
   const passwords = Array.from({ length: count }, () => fn(body));
 
-  const response = {
+  const responseBody = {
     passwords,
     meta: {
       type,
       count,
-      generatedAt:    new Date().toISOString(),
-      wordlistSize:   WORD_LIST.length,
-      rateNote:       "SHA-256 @ 8B/sec GPU baseline — identical to client-side calculation",
-      crackTimeNote:  "Generation model: wordlist attack (conservative). bfTime: character brute-force (what most meters show).",
+      generatedAt:   new Date().toISOString(),
+      wordlistSize:  WORD_LIST.length,
+      rateNote:      "SHA-256 @ 8B/sec GPU baseline — identical to client-side calculation",
+      crackTimeNote: "Generation model: wordlist attack (conservative). bfTime: character brute-force (what most meters show).",
     },
   };
 
   if (ignoredFields.length > 0) {
-    response.meta.ignoredFields = ignoredFields;
-    response.meta.ignoredNote   = `These fields are not used for type "${type}" and were ignored`;
+    responseBody.meta.ignoredFields = ignoredFields;
+    responseBody.meta.ignoredNote   = `These fields are not used for type "${type}" and were ignored`;
   }
 
-  return new Response(JSON.stringify(response), {
-    status: 200,
-    headers: {
-      "Content-Type":               "application/json",
-      "Access-Control-Allow-Origin":"*",
-      "Access-Control-Allow-Methods":"POST, OPTIONS",
-      "Access-Control-Allow-Headers":"Content-Type",
-      "X-Content-Type-Options":     "nosniff",
-      "Cache-Control":              "no-store",
-    },
-  });
-}
-
-export async function onRequestOptions() {
-  return new Response(null, { status: 204, headers: {
-    "Access-Control-Allow-Origin": "*",
-    "Access-Control-Allow-Methods":"POST, OPTIONS",
-    "Access-Control-Allow-Headers":"Content-Type",
-    "Access-Control-Max-Age":      "86400",
-  }});
+  return jsonResponse(responseBody, 200, rlHeaders);
 }

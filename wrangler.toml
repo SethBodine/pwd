@@ -2,7 +2,7 @@
 # https://developers.cloudflare.com/pages/
 
 name            = "pwd"
-compatibility_date = "2024-01-01"
+compatibility_date = "2025-01-01"
 
 # Pages build config
 pages_build_output_dir = "public"
@@ -12,3 +12,12 @@ pages_build_output_dir = "public"
 # command = ""
 
 # No environment variables required — no tracking, no analytics.
+
+# KV namespace for API rate limiting (200 requests/day per IP).
+# Before deploying:
+#   1. Create the namespace:  wrangler kv:namespace create "RATE_LIMIT"
+#   2. Replace the id below with the id printed by that command.
+#   3. For local dev, also create a preview namespace and add its id as preview_id.
+[[kv_namespaces]]
+binding  = "RATE_LIMIT"
+id       = "9768c0afdc54478ca61178c1b5fd4a83"

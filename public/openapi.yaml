@@ -45,10 +45,10 @@ externalDocs:
   url: https://github.com/SethBodine/pwd
 
 servers:
-  - url: https://YOUR_DOMAIN
-    description: Production (Cloudflare Pages — update to your actual domain)
+  - url: https://pwd.insecure.co.nz
+    description: Production (Cloudflare Pages)
   - url: http://localhost:8788
-    description: Local development (wrangler pages dev)
+    description: Local development — run `wrangler pages dev public` to start
 
 tags:
   - name: generation
