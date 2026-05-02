@@ -8052,15 +8052,19 @@ function genPhrase(opts) {
 // ─────────────────────────────────────────────
 // Rate limiting
 // ─────────────────────────────────────────────
-// 200 requests per IP per UTC calendar day, stored in Cloudflare KV.
+// 1000 passwords per IP per UTC calendar day, stored in Cloudflare KV.
+// The limit is counted per password generated (not per request) so that
+// a single request for count=10 correctly consumes 10 of the daily quota.
 // KV key format:  rl:<ip>:<YYYY-MM-DD>
 // KV value:       JSON { count: number }
 // TTL:            48 hours (keys auto-expire so the namespace stays clean)
 
-const RATE_LIMIT_MAX = 200;
+const RATE_LIMIT_MAX = 1000;
 const RATE_LIMIT_TTL = 60 * 60 * 48; // 48 h in seconds — covers end-of-day edge cases
 
-async function checkRateLimit(env, ip) {
+// passwordsRequested — how many passwords this request wants to generate.
+// We check before generating so the counter reflects what was actually charged.
+async function checkRateLimit(env, ip, passwordsRequested) {
   // If the KV binding isn't wired up (e.g. local dev without a namespace),
   // fail open so development isn't blocked.
   if (!env?.RATE_LIMIT) return { allowed: true, count: 0, remaining: RATE_LIMIT_MAX };
@@ -8068,32 +8072,38 @@ async function checkRateLimit(env, ip) {
   const today = new Date().toISOString().slice(0, 10); // "YYYY-MM-DD" UTC
   const key   = `rl:${ip}:${today}`;
 
-  let count = 0;
+  let current = 0;
   try {
     const stored = await env.RATE_LIMIT.get(key);
-    if (stored) count = JSON.parse(stored).count ?? 0;
+    if (stored) current = JSON.parse(stored).count ?? 0;
   } catch {
     // KV read failure — fail open rather than blocking legitimate traffic.
     return { allowed: true, count: 0, remaining: RATE_LIMIT_MAX };
   }
 
-  count += 1;
+  // Reject before writing if this request would exceed the quota.
+  const allowed = (current + passwordsRequested) <= RATE_LIMIT_MAX;
 
-  try {
-    await env.RATE_LIMIT.put(key, JSON.stringify({ count }), { expirationTtl: RATE_LIMIT_TTL });
-  } catch {
-    // KV write failure — still serve the request; just skip recording.
+  if (allowed) {
+    // Only write when the request is permitted — avoids inflating the counter
+    // for blocked requests (which could be used to exhaust a victim's quota).
+    const newCount = current + passwordsRequested;
+    try {
+      await env.RATE_LIMIT.put(key, JSON.stringify({ count: newCount }), { expirationTtl: RATE_LIMIT_TTL });
+    } catch {
+      // KV write failure — still serve the request; just skip recording.
+    }
+    current = newCount;
   }
 
-  const allowed   = count <= RATE_LIMIT_MAX;
-  const remaining = Math.max(0, RATE_LIMIT_MAX - count);
+  const remaining = Math.max(0, RATE_LIMIT_MAX - current);
 
   // Reset is midnight UTC tonight expressed as a Unix epoch second.
-  const tomorrow  = new Date(today);
+  const tomorrow = new Date(today);
   tomorrow.setUTCDate(tomorrow.getUTCDate() + 1);
-  const reset     = Math.floor(tomorrow.getTime() / 1000);
+  const reset = Math.floor(tomorrow.getTime() / 1000);
 
-  return { allowed, count, remaining, reset };
+  return { allowed, count: current, remaining, reset };
 }
 
 // ─────────────────────────────────────────────
@@ -8145,30 +8155,12 @@ export async function onRequestOptions() {
 export async function onRequestPost(context) {
   const { request, env } = context;
 
-  // ── Rate limiting — checked before any body parsing.
   const ip = request.headers.get("cf-connecting-ip") ||
              request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
              "unknown";
 
-  const rl = await checkRateLimit(env, ip);
-
-  // Standard X-RateLimit headers tell API consumers where they stand.
-  const rlHeaders = {
-    "X-RateLimit-Limit":     String(RATE_LIMIT_MAX),
-    "X-RateLimit-Remaining": String(rl.remaining),
-    "X-RateLimit-Reset":     String(rl.reset ?? ""),
-    "X-RateLimit-Policy":    `${RATE_LIMIT_MAX};w=86400`,
-  };
-
-  if (!rl.allowed) {
-    return jsonResponse({
-      error:    "Rate limit exceeded — 200 requests per IP per day. Try again tomorrow.",
-      resetAt:  new Date((rl.reset ?? 0) * 1000).toISOString(),
-      passwords: [],
-    }, 429, rlHeaders);
-  }
-
-  // ── Parse body
+  // ── Parse body first so we know how many passwords are being requested
+  // before we charge the rate limit counter.
   let body = {};
   try {
     // Enforce Content-Type to prevent CSRF-style form submissions reaching the API.
@@ -8177,7 +8169,7 @@ export async function onRequestPost(context) {
       return jsonResponse({
         error: "Content-Type must be application/json",
         passwords: [],
-      }, 415, rlHeaders);
+      }, 415);
     }
 
     // Hard cap at 4 KB — a valid request is well under 512 bytes.
@@ -8190,10 +8182,10 @@ export async function onRequestPost(context) {
       return jsonResponse({
         error: "Request body too large (max 4 KB)",
         passwords: [],
-      }, 413, rlHeaders);
+      }, 413);
     }
 
-    // Strip JS-style comments (// … and /* … */) before parsing so that
+    // Strip JS-style comments (// ... and /* ... */) before parsing so that
     // Swagger-UI examples and curl snippets with inline comments still work.
     const stripped = raw
       .replace(/\/\/[^\n\r]*/g, "")      // single-line comments
@@ -8203,7 +8195,7 @@ export async function onRequestPost(context) {
     return jsonResponse({
       error: "Invalid JSON body — check your syntax (comments are allowed but all brackets/braces must be balanced)",
       passwords: [],
-    }, 400, rlHeaders);
+    }, 400);
   }
 
   // ── Validate parameters
@@ -8213,13 +8205,35 @@ export async function onRequestPost(context) {
       error:    "Invalid request parameters",
       details:  validation.errors,
       passwords: [],
-    }, 400, rlHeaders);
+    }, 400);
+  }
+
+  // ── Rate limiting — counted per password, not per request.
+  // A request for count=10 consumes 10 of the daily quota, preventing a
+  // caller from bypassing the limit by batching (e.g. 200 requests × 10 = 2000 passwords).
+  const type  = body.type || "word";
+  const count = Math.min(10, Math.max(1, parseInt(body.count) || 1));
+
+  const rl = await checkRateLimit(env, ip, count);
+
+  // Standard X-RateLimit headers tell API consumers where they stand.
+  const rlHeaders = {
+    "X-RateLimit-Limit":     String(RATE_LIMIT_MAX),
+    "X-RateLimit-Remaining": String(rl.remaining),
+    "X-RateLimit-Reset":     String(rl.reset ?? ""),
+    "X-RateLimit-Policy":    `${RATE_LIMIT_MAX};w=86400`,
+  };
+
+  if (!rl.allowed) {
+    return jsonResponse({
+      error:    `Rate limit exceeded — ${RATE_LIMIT_MAX} passwords per IP per day. Try again tomorrow.`,
+      resetAt:  new Date((rl.reset ?? 0) * 1000).toISOString(),
+      passwords: [],
+    }, 429, rlHeaders);
   }
 
   // ── Generate
-  const type  = body.type || "word";
-  const count = Math.min(10, Math.max(1, parseInt(body.count) || 1));
-  const fn    = type === "word" ? genWord : type === "char" ? genChar : genPhrase;
+  const fn = type === "word" ? genWord : type === "char" ? genChar : genPhrase;
 
   // Note which fields are not applicable to the requested type (for transparency).
   const ignoredFields = [];
